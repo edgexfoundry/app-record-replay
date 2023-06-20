@@ -1,0 +1,11 @@
+# App Record Replay
+[![Build Status](https://jenkins.edgexfoundry.org/view/EdgeX%20Foundry%20Project/job/edgexfoundry/job/app-record-replay/job/main/badge/icon)](https://jenkins.edgexfoundry.org/view/EdgeX%20Foundry%20Project/job/edgexfoundry/job/app-record-replay/job/main/) [![Code Coverage](https://codecov.io/gh/edgexfoundry/app-record-replay/branch/main/graph/badge.svg?token=wMrc2PZbwj)](https://codecov.io/gh/edgexfoundry/app-record-replay) [![Go Report Card](https://goreportcard.com/badge/github.com/edgexfoundry/app-record-replay)](https://goreportcard.com/report/github.com/edgexfoundry/app-record-replay) [![GitHub Latest Dev Tag)](https://img.shields.io/github/v/tag/edgexfoundry/app-record-replay?include_prereleases&sort=semver&label=latest-dev)](https://github.com/edgexfoundry/app-record-replay/tags) ![GitHub Latest Stable Tag)](https://img.shields.io/github/v/tag/edgexfoundry/app-record-replay?sort=semver&label=latest-stable) [![GitHub License](https://img.shields.io/github/license/edgexfoundry/app-record-replay)](https://choosealicense.com/licenses/apache-2.0/) ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/edgexfoundry/app-record-replay) [![GitHub Pull Requests](https://img.shields.io/github/issues-pr-raw/edgexfoundry/app-record-replay)](https://github.com/edgexfoundry/app-record-replay/pulls) [![GitHub Contributors](https://img.shields.io/github/contributors/edgexfoundry/app-record-replay)](https://github.com/edgexfoundry/app-record-replay/contributors) [![GitHub Committers](https://img.shields.io/badge/team-committers-green)](https://github.com/orgs/edgexfoundry/teams/app-record-replay-committers/members) [![GitHub Commit Activity](https://img.shields.io/github/commit-activity/m/edgexfoundry/app-record-replay)](https://github.com/edgexfoundry/app-record-replay/commits)
+
+> **Warning**  
+> The **main** branch of this repository contains work-in-progress development code for the upcoming release, and is **not guaranteed to be stable or working**.
+> It is only compatible with the [main branch of edgex-compose](https://github.com/edgexfoundry/edgex-compose) which uses the Docker images built from the **main** branch of this repo and other repos.
+>
+> **The source for the latest release can be found at [Releases](https://github.com/edgexfoundry/app-record-replay/releases).**
+
+
+Content TBD

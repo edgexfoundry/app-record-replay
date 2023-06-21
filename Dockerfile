@@ -37,7 +37,7 @@ RUN $MAKE
 FROM alpine:3.17
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
   copyright='Copyright (c) 2023: Intel'
-LABEL Name=app-service-configurable Version=${VERSION}
+LABEL Name=app-record-replay Version=${VERSION}
 
 # dumb-init is required as security-bootstrapper uses it in the entrypoint script
 RUN apk add --update --no-cache ca-certificates dumb-init

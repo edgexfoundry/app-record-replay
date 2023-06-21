@@ -13,30 +13,34 @@
 // limitations under the License.
 //
 
-package data
+package interfaces
 
-import "github.com/edgexfoundry/app-record-replay/pkg/dtos"
+import (
+	"net/http"
+)
 
-// RecordManager defines the interface for implementations that records and replays captured data
-type RecordManager interface {
+// HttpController defines the interface for implementations that handle the HTTP request
+type HttpController interface {
+	// AddRoutes adds all the REST routes to the HTTP router
+	AddRoutes()
 	// StartRecording starts a recording session based on the values in the request.
 	// An error is returned if the request data is incomplete or a record or replay session is currently running.
-	StartRecording(request dtos.RecordRequest) error
+	StartRecording(writer http.ResponseWriter, request *http.Request)
 	// CancelRecording cancels the current recording session
-	CancelRecording()
+	CancelRecording(writer http.ResponseWriter, request *http.Request)
 	// RecordingStatus returns the status of the current recording session
-	RecordingStatus() dtos.RecordStatus
+	RecordingStatus(writer http.ResponseWriter, request *http.Request)
 	// StartReplay starts a replay session based on the values in the request
 	// An error is returned if the request data is incomplete or a record or replay session is currently running.
-	StartReplay(request dtos.ReplayRequest) error
+	StartReplay(writer http.ResponseWriter, request *http.Request)
 	// CancelReplay cancels the current replay session
-	CancelReplay()
+	CancelReplay(writer http.ResponseWriter, request *http.Request)
 	// ReplayStatus returns the status of the current replay session
-	ReplayStatus() dtos.ReplayStatus
+	ReplayStatus(writer http.ResponseWriter, request *http.Request)
 	// ExportRecordedData returns the data for the last record session
 	// An error is returned if the no record session was run or a record session is currently running
-	ExportRecordedData() (dtos.RecordedData, error)
+	ExportRecordedData(writer http.ResponseWriter, request *http.Request)
 	// ImportRecordedData imports data from a previously exported record session.
 	// An error is returned if a record or replay session is currently running or the data is incomplete
-	ImportRecordedData(data dtos.RecordedData) error
+	ImportRecordedData(writer http.ResponseWriter, request *http.Request)
 }

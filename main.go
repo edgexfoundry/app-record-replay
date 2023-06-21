@@ -31,19 +31,19 @@ const (
 	serviceKey = "app-record-replay"
 )
 
-type myApp struct {
+type recordReplayApp struct {
 	service       interfaces.ApplicationService
 	lc            logger.LoggingClient
 	serviceConfig *config.ServiceConfig
 }
 
 func main() {
-	app := myApp{}
+	app := recordReplayApp{}
 	code := app.CreateAndRunAppService(serviceKey, pkg.NewAppService)
 	os.Exit(code)
 }
 
-func (app *myApp) CreateAndRunAppService(serviceKey string, newServiceFactory func(string) (interfaces.ApplicationService, bool)) int {
+func (app *recordReplayApp) CreateAndRunAppService(serviceKey string, newServiceFactory func(string) (interfaces.ApplicationService, bool)) int {
 	var ok bool
 	app.service, ok = newServiceFactory(serviceKey)
 	if !ok {
@@ -52,6 +52,7 @@ func (app *myApp) CreateAndRunAppService(serviceKey string, newServiceFactory fu
 
 	app.lc = app.service.LoggingClient()
 
+	// TODO remove these is no custom config is needed.
 	app.serviceConfig = &config.ServiceConfig{}
 	if err := app.service.LoadCustomConfig(app.serviceConfig, "AppCustom"); err != nil {
 		app.lc.Errorf("failed load custom configuration: %s", err.Error())

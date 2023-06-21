@@ -40,16 +40,9 @@ type ServiceConfig struct {
 // configuration.yaml file and Configuration Provider (aka Consul), if enabled.
 type AppCustomConfig struct {
 	ResourceNames string
-	SomeValue     int
-	SomeService   HostInfo
+
 }
 
-// HostInfo is example struct for defining connection information for external service
-type HostInfo struct {
-	Host     string
-	Port     int
-	Protocol string
-}
 
 // TODO: Update using your Custom configuration type.
 // UpdateFromRaw updates the service's full configuration from raw data received from
@@ -68,13 +61,7 @@ func (c *ServiceConfig) UpdateFromRaw(rawConfig interface{}) bool {
 // Validate ensures your custom configuration has proper values.
 // TODO: Update to properly validate your custom configuration
 func (ac *AppCustomConfig) Validate() error {
-	if ac.SomeValue <= 0 {
-		return errors.New("SomeValue must be greater than zero")
-	}
-
-	if reflect.DeepEqual(ac.SomeService, HostInfo{}) {
-		return errors.New("SomeService is not set")
-	}
+	
 
 	return nil
 }

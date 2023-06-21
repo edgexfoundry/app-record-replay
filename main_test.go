@@ -1,4 +1,3 @@
-// TODO: Change Copyright to your company if open sourcing or remove header
 //
 // Copyright (c) 2021 Intel Corporation
 //
@@ -32,29 +31,13 @@ import (
 
 // This is an example of how to test the code that would typically be in the main() function use mocks
 // Not to helpful for a simple main() , but can be if the main() has more complexity that should be unit tested
-// TODO: add/update tests for your customized CreateAndRunAppService or remove if your main code doesn't require unit testing.
 
 func TestCreateAndRunService_Success(t *testing.T) {
-	app := myApp{}
+	app := recordReplayApp{}
 
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
-		mockAppService.On("GetAppSettingStrings", "DeviceNames").
-			Return([]string{"Random-Boolean-Device, Random-Integer-Device"}, nil)
-		mockAppService.On("SetDefaultFunctionsPipeline", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(nil)
-		mockAppService.On("AddFunctionsPipelineForTopics", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(nil)
-		mockAppService.On("LoadCustomConfig", mock.Anything, mock.Anything, mock.Anything).
-			Return(nil).Run(func(args mock.Arguments) {
-			// set the required configuration so validation passes
-			app.serviceConfig.AppCustom.SomeValue = 987
-			app.serviceConfig.AppCustom.SomeService.Host = "SomeHost"
-		})
-		mockAppService.On("ListenForCustomConfigChanges", mock.Anything, mock.Anything, mock.Anything).
-			Return(nil)
-		mockAppService.On("Run").Return(nil)
 
 		return mockAppService, true
 	}
@@ -65,7 +48,7 @@ func TestCreateAndRunService_Success(t *testing.T) {
 }
 
 func TestCreateAndRunService_NewService_Failed(t *testing.T) {
-	app := myApp{}
+	app := recordReplayApp{}
 
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		return nil, false
@@ -76,7 +59,7 @@ func TestCreateAndRunService_NewService_Failed(t *testing.T) {
 }
 
 func TestCreateAndRunService_GetAppSettingStrings_Failed(t *testing.T) {
-	app := myApp{}
+	app := recordReplayApp{}
 
 	getAppSettingStringsCalled := false
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
@@ -96,41 +79,8 @@ func TestCreateAndRunService_GetAppSettingStrings_Failed(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
-func TestCreateAndRunService_SetFunctionsPipeline_Failed(t *testing.T) {
-	app := myApp{}
-
-	// ensure failure is from SetFunctionsPipeline
-	setFunctionsPipelineCalled := false
-
-	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
-		mockAppService := &mocks.ApplicationService{}
-		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
-		mockAppService.On("GetAppSettingStrings", "DeviceNames").
-			Return([]string{"Random-Boolean-Device, Random-Integer-Device"}, nil)
-		mockAppService.On("LoadCustomConfig", mock.Anything, mock.Anything, mock.Anything).
-			Return(nil).Run(func(args mock.Arguments) {
-			// set the required configuration so validation passes
-			app.serviceConfig.AppCustom.SomeValue = 987
-			app.serviceConfig.AppCustom.SomeService.Host = "SomeHost"
-		})
-		mockAppService.On("ListenForCustomConfigChanges", mock.Anything, mock.Anything, mock.Anything).
-			Return(nil)
-		mockAppService.On("SetDefaultFunctionsPipeline", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(fmt.Errorf("Failed")).Run(func(args mock.Arguments) {
-			setFunctionsPipelineCalled = true
-		})
-
-		return mockAppService, true
-	}
-
-	expected := -1
-	actual := app.CreateAndRunAppService("TestKey", mockFactory)
-	require.True(t, setFunctionsPipelineCalled, "SetFunctionsPipeline never called")
-	assert.Equal(t, expected, actual)
-}
-
 func TestCreateAndRunService_Run_Failed(t *testing.T) {
-	app := myApp{}
+	app := recordReplayApp{}
 
 	// ensure failure is from Run
 	RunCalled := false
@@ -138,20 +88,6 @@ func TestCreateAndRunService_Run_Failed(t *testing.T) {
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
-		mockAppService.On("GetAppSettingStrings", "DeviceNames").
-			Return([]string{"Random-Boolean-Device, Random-Integer-Device"}, nil)
-		mockAppService.On("LoadCustomConfig", mock.Anything, mock.Anything, mock.Anything).
-			Return(nil).Run(func(args mock.Arguments) {
-			// set the required configuration so validation passes
-			app.serviceConfig.AppCustom.SomeValue = 987
-			app.serviceConfig.AppCustom.SomeService.Host = "SomeHost"
-		})
-		mockAppService.On("ListenForCustomConfigChanges", mock.Anything, mock.Anything, mock.Anything).
-			Return(nil)
-		mockAppService.On("SetDefaultFunctionsPipeline", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(nil)
-		mockAppService.On("AddFunctionsPipelineForTopics", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(nil)
 		mockAppService.On("Run").Return(fmt.Errorf("Failed")).Run(func(args mock.Arguments) {
 			RunCalled = true
 		})

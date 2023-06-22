@@ -24,10 +24,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreateDefaultDataManger(t *testing.T) {
-	target := CreateDefaultDataManger(context.Background(), &mocks.ApplicationService{})
+func TestNewManager(t *testing.T) {
+	target := NewManager(context.Background(), &mocks.ApplicationService{})
 	require.NotNil(t, target)
-	d := target.(*defaultDataManager)
+	d := target.(*dataManager)
 	require.NotNil(t, d)
 	assert.NotNil(t, d.dataChan)
 	assert.NotNil(t, d.ctx)
@@ -67,12 +67,12 @@ func TestDefaultDataManager_ImportRecordedData(t *testing.T) {
 
 func TestDefaultDataManager_CountEvents(t *testing.T) {
 	// TODO: Implement using TDD
-	target := defaultDataManager{}
+	target := dataManager{}
 	target.countEvents(nil, nil)
 }
 
 func TestDefaultDataManager_ProcessBatchedData(t *testing.T) {
 	// TODO: Implement using TDD
-	target := defaultDataManager{}
+	target := dataManager{}
 	target.processBatchedData(nil, nil)
 }

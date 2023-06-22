@@ -1,4 +1,3 @@
-//
 // Copyright (c) 2023 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,95 +13,84 @@
 // limitations under the License.
 //
 
-package data
+package controller
 
 import (
-	"context"
+	"net/http"
 
-	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
+	interfaces2 "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
-	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
-	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
 )
 
-// NewManager is the factory function which instantiates a Data Manager
-func NewManager(ctx context.Context, service appInterfaces.ApplicationService) interfaces.DataManager {
-	return &dataManager{
-		dataChan: make(chan []coreDtos.Event, 1),
-		ctx:      ctx,
-		appSvc:   service,
+type httpController struct {
+	lc          logger.LoggingClient
+	dataManager interfaces.DataManager
+	appSdk      interfaces2.ApplicationService
+}
+
+// New is the factory function which instantiates a new HTTP Controller
+func New(dataManager interfaces.DataManager, appSdk interfaces2.ApplicationService, lc logger.LoggingClient) interfaces.HttpController {
+	return &httpController{
+		lc:          lc,
+		dataManager: dataManager,
+		appSdk:      appSdk,
 	}
 }
 
-// dataManager implements interface that records and replays captured data
-type dataManager struct {
-	dataChan chan []coreDtos.Event
-	ctx      context.Context
-	appSvc   appInterfaces.ApplicationService
+func (c *httpController) AddRoutes() {
+	//TODO implement me using TDD
+	panic("implement me")
 }
 
 // StartRecording starts a recording session based on the values in the request.
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
-func (m *dataManager) StartRecording(request dtos.RecordRequest) error {
+func (c *httpController) StartRecording(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
 }
 
 // CancelRecording cancels the current recording session
-func (m *dataManager) CancelRecording() {
+func (c *httpController) CancelRecording(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
 }
 
 // RecordingStatus returns the status of the current recording session
-func (m *dataManager) RecordingStatus() dtos.RecordStatus {
+func (c *httpController) RecordingStatus(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
 }
 
 // StartReplay starts a replay session based on the values in the request
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
-func (m *dataManager) StartReplay(request dtos.ReplayRequest) error {
+func (c *httpController) StartReplay(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
 }
 
 // CancelReplay cancels the current replay session
-func (m *dataManager) CancelReplay() {
+func (c *httpController) CancelReplay(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
 }
 
 // ReplayStatus returns the status of the current replay session
-func (m *dataManager) ReplayStatus() dtos.ReplayStatus {
+func (c *httpController) ReplayStatus(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
 }
 
 // ExportRecordedData returns the data for the last record session
 // An error is returned if the no record session was run or a record session is currently running
-func (m *dataManager) ExportRecordedData() (dtos.RecordedData, error) {
+func (c *httpController) ExportRecordedData(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
 }
 
 // ImportRecordedData imports data from a previously exported record session.
 // An error is returned if a record or replay session is currently running or the data is incomplete
-func (m *dataManager) ImportRecordedData(data dtos.RecordedData) error {
+func (c *httpController) ImportRecordedData(writer http.ResponseWriter, request *http.Request) {
 	//TODO implement me using TDD
 	panic("implement me")
-}
-
-// Pipeline functions
-
-// countEvents counts the number of Events the function receives.
-func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
-	//TODO implement me using TDD
-	return false, nil
-}
-
-// processBatchedData processes the batched data for the current recording session
-func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
-	//TODO implement me using TDD
-	return false, nil
 }

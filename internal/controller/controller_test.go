@@ -16,12 +16,17 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	appMocks "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces/mocks"
+	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -85,7 +90,57 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 }
 
 func TestHttpController_StartRecording(t *testing.T) {
-	// TODO: Implement using TDD
+	// TODO: Complete Implementation using TDD
+	mockDataManager := &mocks.DataManager{}
+	mockSdk := &appMocks.ApplicationService{}
+	target := New(mockDataManager, mockSdk, &loggerMocks.LoggingClient{}).(*httpController)
+
+	handler := http.HandlerFunc(target.startRecording)
+
+	emptyRequestDTO := dtos.RecordRequest{}
+	emptyRequestDTOJson, err := json.Marshal(emptyRequestDTO)
+	require.NoError(t, err)
+
+	validRequestDTO := dtos.RecordRequest{
+		Duration:              1 * time.Minute,
+		EventLimit:            10,
+		IncludeDeviceProfiles: nil,
+		IncludeDevices:        nil,
+		IncludeSources:        nil,
+		ExcludeDeviceProfiles: nil,
+		ExcludeDevices:        nil,
+		ExcludeSources:        nil,
+	}
+	validRequestDTOJson, err := json.Marshal(validRequestDTO)
+	require.NoError(t, err)
+
+	tests := []struct {
+		Name                         string
+		Input                        []byte
+		MockDataManagerStartResponse error
+		ExpectedStatus               int
+		ExpectedMessage              string
+	}{
+		{"Success", validRequestDTOJson, nil, http.StatusAccepted, ""},
+		{"Recording failed", validRequestDTOJson, errors.New("recording failed"), http.StatusInternalServerError, failedRecording},
+		{"No Input", nil, nil, http.StatusBadRequest, failedRequestJSON},
+		{"Bad JSON Input", []byte("bad input"), nil, http.StatusBadRequest, failedRequestJSON},
+		{"Empty DTO Input", emptyRequestDTOJson, nil, http.StatusBadRequest, failedRecordRequestValidate},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("StartRecording", validRequestDTO).Return(test.MockDataManagerStartResponse).Once()
+			req, err := http.NewRequest(http.MethodPost, recordRoute, bytes.NewReader(test.Input))
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+			assert.Contains(t, testRecorder.Body.String(), test.ExpectedMessage)
+		})
+	}
 }
 
 func TestHttpController_RecordingStatus(t *testing.T) {

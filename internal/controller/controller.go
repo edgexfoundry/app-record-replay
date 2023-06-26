@@ -16,20 +16,25 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
 	interfaces2 "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
+	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 )
 
 const (
-	recordRoute        = common.ApiBase + "/record"
-	replayRoute        = common.ApiBase + "/replay"
-	dataRoute          = common.ApiBase + "/data"
-	failedRouteMessage = "failed to added %s route for %s method: %v"
+	recordRoute                 = common.ApiBase + "/record"
+	replayRoute                 = common.ApiBase + "/replay"
+	dataRoute                   = common.ApiBase + "/data"
+	failedRouteMessage          = "failed to added %s route for %s method: %v"
+	failedRequestJSON           = "Unable to process request JSON"
+	failedRecordRequestValidate = "Record request failed validation: Duration and/or EventLimit must be set"
+	failedRecording             = "Recording failed"
 )
 
 type httpController struct {
@@ -79,10 +84,29 @@ func (c *httpController) AddRoutes() error {
 }
 
 // StartRecording starts a recording session based on the values in the request.
-// An error is returned if the request data is incomplete or a record or replay session is currently running.
+// An error is returned if the request data is incomplete.
 func (c *httpController) startRecording(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	startRequest := dtos.RecordRequest{}
+
+	if err := json.NewDecoder(request.Body).Decode(&startRequest); err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
+		return
+	}
+
+	if startRequest.Duration == 0 && startRequest.EventLimit == 0 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(failedRecordRequestValidate))
+		return
+	}
+
+	if err := c.dataManager.StartRecording(startRequest); err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRecording, err)))
+		return
+	}
+
+	writer.WriteHeader(http.StatusAccepted)
 }
 
 // CancelRecording cancels the current recording session

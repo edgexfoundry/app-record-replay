@@ -98,8 +98,6 @@ func TestHttpController_StartRecording(t *testing.T) {
 	handler := http.HandlerFunc(target.startRecording)
 
 	emptyRequestDTO := dtos.RecordRequest{}
-	emptyRequestDTOJson, err := json.Marshal(emptyRequestDTO)
-	require.NoError(t, err)
 
 	validRequestDTO := dtos.RecordRequest{
 		Duration:              1 * time.Minute,
@@ -111,8 +109,27 @@ func TestHttpController_StartRecording(t *testing.T) {
 		ExcludeDevices:        nil,
 		ExcludeSources:        nil,
 	}
-	validRequestDTOJson, err := json.Marshal(validRequestDTO)
-	require.NoError(t, err)
+	badDurationRequestDTO := dtos.RecordRequest{
+		Duration:              -99,
+		EventLimit:            10,
+		IncludeDeviceProfiles: nil,
+		IncludeDevices:        nil,
+		IncludeSources:        nil,
+		ExcludeDeviceProfiles: nil,
+		ExcludeDevices:        nil,
+		ExcludeSources:        nil,
+	}
+
+	badEventLimitRequestDTO := dtos.RecordRequest{
+		Duration:              0,
+		EventLimit:            -99,
+		IncludeDeviceProfiles: nil,
+		IncludeDevices:        nil,
+		IncludeSources:        nil,
+		ExcludeDeviceProfiles: nil,
+		ExcludeDevices:        nil,
+		ExcludeSources:        nil,
+	}
 
 	tests := []struct {
 		Name                         string
@@ -121,11 +138,13 @@ func TestHttpController_StartRecording(t *testing.T) {
 		ExpectedStatus               int
 		ExpectedMessage              string
 	}{
-		{"Success", validRequestDTOJson, nil, http.StatusAccepted, ""},
-		{"Recording failed", validRequestDTOJson, errors.New("recording failed"), http.StatusInternalServerError, failedRecording},
+		{"Success", marshal(t, validRequestDTO), nil, http.StatusAccepted, ""},
+		{"Recording failed", marshal(t, validRequestDTO), errors.New("recording failed"), http.StatusInternalServerError, failedRecording},
 		{"No Input", nil, nil, http.StatusBadRequest, failedRequestJSON},
 		{"Bad JSON Input", []byte("bad input"), nil, http.StatusBadRequest, failedRequestJSON},
-		{"Empty DTO Input", emptyRequestDTOJson, nil, http.StatusBadRequest, failedRecordRequestValidate},
+		{"Empty DTO Input", marshal(t, emptyRequestDTO), nil, http.StatusBadRequest, failedRecordRequestValidate},
+		{"Bad Duration", marshal(t, badDurationRequestDTO), nil, http.StatusBadRequest, failedRecordDurationValidate},
+		{"Bad Event Limit", marshal(t, badEventLimitRequestDTO), nil, http.StatusBadRequest, failedRecordEventLimitValidate},
 	}
 
 	for _, test := range tests {
@@ -169,4 +188,10 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 
 func TestHttpController_ImportRecordedData(t *testing.T) {
 	// TODO: Implement using TDD
+}
+
+func marshal(t *testing.T, v any) []byte {
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	return data
 }

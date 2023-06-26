@@ -28,13 +28,17 @@ import (
 )
 
 const (
-	recordRoute                 = common.ApiBase + "/record"
-	replayRoute                 = common.ApiBase + "/replay"
-	dataRoute                   = common.ApiBase + "/data"
-	failedRouteMessage          = "failed to added %s route for %s method: %v"
-	failedRequestJSON           = "Unable to process request JSON"
-	failedRecordRequestValidate = "Record request failed validation: Duration and/or EventLimit must be set"
-	failedRecording             = "Recording failed"
+	recordRoute = common.ApiBase + "/record"
+	replayRoute = common.ApiBase + "/replay"
+	dataRoute   = common.ApiBase + "/data"
+
+	failedRouteMessage = "failed to added %s route for %s method: %v"
+
+	failedRequestJSON              = "Unable to process request JSON"
+	failedRecordRequestValidate    = "Record request failed validation: Duration and/or EventLimit must be set"
+	failedRecordDurationValidate   = "Record request failed validation: Duration must be > 0 when set"
+	failedRecordEventLimitValidate = "Record request failed validation: Event Limit must be > 0 when set"
+	failedRecording                = "Recording failed"
 )
 
 type httpController struct {
@@ -97,6 +101,18 @@ func (c *httpController) startRecording(writer http.ResponseWriter, request *htt
 	if startRequest.Duration == 0 && startRequest.EventLimit == 0 {
 		writer.WriteHeader(http.StatusBadRequest)
 		_, _ = writer.Write([]byte(failedRecordRequestValidate))
+		return
+	}
+
+	if startRequest.Duration < 0 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(failedRecordDurationValidate))
+		return
+	}
+
+	if startRequest.EventLimit < 0 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(failedRecordEventLimitValidate))
 		return
 	}
 

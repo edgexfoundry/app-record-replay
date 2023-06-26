@@ -16,12 +16,15 @@
 package controller
 
 import (
+	"errors"
+	"net/http"
 	"testing"
 
 	appMocks "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces/mocks"
 	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,8 +38,50 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, c.dataManager)
 }
 
-func TestHttpController_AddRoutes(t *testing.T) {
-	// TODO: Implement using TDD
+func TestHttpController_AddRoutes_Success(t *testing.T) {
+	mockSdk := &appMocks.ApplicationService{}
+	mockSdk.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	target := New(nil, mockSdk, &loggerMocks.LoggingClient{})
+
+	err := target.AddRoutes()
+	require.NoError(t, err)
+}
+
+func TestHttpController_AddRoutes_Error(t *testing.T) {
+	tests := []struct {
+		Name   string
+		Route  string
+		Method string
+	}{
+		{"Start Recording", recordRoute, http.MethodPost},
+		{"Cancel Recording", recordRoute, http.MethodDelete},
+		{"Recording Status", recordRoute, http.MethodGet},
+
+		{"Start Replay", replayRoute, http.MethodPost},
+		{"Cancel Replay", replayRoute, http.MethodDelete},
+		{"Replay Status", replayRoute, http.MethodGet},
+
+		{"Export", dataRoute, http.MethodGet},
+		{"Import", dataRoute, http.MethodPost},
+	}
+
+	expectedError := errors.New("AddRoute error")
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockSdk := &appMocks.ApplicationService{}
+			mockSdk.On("AddRoute", test.Route, mock.Anything, test.Method).Return(expectedError)
+			mockSdk.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+			target := New(nil, mockSdk, &loggerMocks.LoggingClient{})
+
+			err := target.AddRoutes()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), test.Route)
+			assert.Contains(t, err.Error(), test.Method)
+			assert.Contains(t, err.Error(), expectedError.Error())
+		})
+	}
 }
 
 func TestHttpController_StartRecording(t *testing.T) {

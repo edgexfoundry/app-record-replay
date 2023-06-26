@@ -16,12 +16,17 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	appMocks "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces/mocks"
+	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -85,7 +90,76 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 }
 
 func TestHttpController_StartRecording(t *testing.T) {
-	// TODO: Implement using TDD
+	// TODO: Complete Implementation using TDD
+	mockDataManager := &mocks.DataManager{}
+	mockSdk := &appMocks.ApplicationService{}
+	target := New(mockDataManager, mockSdk, &loggerMocks.LoggingClient{}).(*httpController)
+
+	handler := http.HandlerFunc(target.startRecording)
+
+	emptyRequestDTO := dtos.RecordRequest{}
+
+	validRequestDTO := dtos.RecordRequest{
+		Duration:              1 * time.Minute,
+		EventLimit:            10,
+		IncludeDeviceProfiles: nil,
+		IncludeDevices:        nil,
+		IncludeSources:        nil,
+		ExcludeDeviceProfiles: nil,
+		ExcludeDevices:        nil,
+		ExcludeSources:        nil,
+	}
+	badDurationRequestDTO := dtos.RecordRequest{
+		Duration:              -99,
+		EventLimit:            10,
+		IncludeDeviceProfiles: nil,
+		IncludeDevices:        nil,
+		IncludeSources:        nil,
+		ExcludeDeviceProfiles: nil,
+		ExcludeDevices:        nil,
+		ExcludeSources:        nil,
+	}
+
+	badEventLimitRequestDTO := dtos.RecordRequest{
+		Duration:              0,
+		EventLimit:            -99,
+		IncludeDeviceProfiles: nil,
+		IncludeDevices:        nil,
+		IncludeSources:        nil,
+		ExcludeDeviceProfiles: nil,
+		ExcludeDevices:        nil,
+		ExcludeSources:        nil,
+	}
+
+	tests := []struct {
+		Name                         string
+		Input                        []byte
+		MockDataManagerStartResponse error
+		ExpectedStatus               int
+		ExpectedMessage              string
+	}{
+		{"Success", marshal(t, validRequestDTO), nil, http.StatusAccepted, ""},
+		{"Recording failed", marshal(t, validRequestDTO), errors.New("recording failed"), http.StatusInternalServerError, failedRecording},
+		{"No Input", nil, nil, http.StatusBadRequest, failedRequestJSON},
+		{"Bad JSON Input", []byte("bad input"), nil, http.StatusBadRequest, failedRequestJSON},
+		{"Empty DTO Input", marshal(t, emptyRequestDTO), nil, http.StatusBadRequest, failedRecordRequestValidate},
+		{"Bad Duration", marshal(t, badDurationRequestDTO), nil, http.StatusBadRequest, failedRecordDurationValidate},
+		{"Bad Event Limit", marshal(t, badEventLimitRequestDTO), nil, http.StatusBadRequest, failedRecordEventLimitValidate},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("StartRecording", validRequestDTO).Return(test.MockDataManagerStartResponse).Once()
+			req, err := http.NewRequest(http.MethodPost, recordRoute, bytes.NewReader(test.Input))
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+			assert.Contains(t, testRecorder.Body.String(), test.ExpectedMessage)
+		})
+	}
 }
 
 func TestHttpController_RecordingStatus(t *testing.T) {
@@ -114,4 +188,10 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 
 func TestHttpController_ImportRecordedData(t *testing.T) {
 	// TODO: Implement using TDD
+}
+
+func marshal(t *testing.T, v any) []byte {
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	return data
 }

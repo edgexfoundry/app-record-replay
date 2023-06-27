@@ -51,4 +51,3 @@ EXPOSE 59712
 
 ENTRYPOINT ["/app-record-replay"]
 CMD ["-cp=consul.http://edgex-core-consul:8500", "--registry"]
-

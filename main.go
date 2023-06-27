@@ -16,8 +16,20 @@
 
 package main
 
-import "fmt"
+import (
+	"os"
+
+	"github.com/edgexfoundry/app-record-replay/internal/app"
+
+	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg"
+)
+
+const (
+	serviceKey = "app-record-replay"
+)
 
 func main() {
-	fmt.Println("Hello from Record & Replay")
+	app := app.New()
+	code := app.CreateAndRunAppService(serviceKey, pkg.NewAppService)
+	os.Exit(code)
 }

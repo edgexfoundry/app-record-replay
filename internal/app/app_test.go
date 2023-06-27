@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2021 Intel Corporation
+// Copyright (c) 2023 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 
-package main
+package app
 
 import (
 	"fmt"
@@ -38,7 +38,7 @@ func TestCreateAndRunService_Success(t *testing.T) {
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
-
+		mockAppService.On("Run").Return(nil)
 		return mockAppService, true
 	}
 
@@ -55,27 +55,6 @@ func TestCreateAndRunService_NewService_Failed(t *testing.T) {
 	}
 	expected := -1
 	actual := app.CreateAndRunAppService("TestKey", mockFactory)
-	assert.Equal(t, expected, actual)
-}
-
-func TestCreateAndRunService_GetAppSettingStrings_Failed(t *testing.T) {
-	app := recordReplayApp{}
-
-	getAppSettingStringsCalled := false
-	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
-		mockAppService := &mocks.ApplicationService{}
-		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
-		mockAppService.On("GetAppSettingStrings", "DeviceNames").
-			Return(nil, fmt.Errorf("Failed")).Run(func(args mock.Arguments) {
-			getAppSettingStringsCalled = true
-		})
-
-		return mockAppService, true
-	}
-
-	expected := -1
-	actual := app.CreateAndRunAppService("TestKey", mockFactory)
-	require.True(t, getAppSettingStringsCalled, "GetAppSettingStrings never called")
 	assert.Equal(t, expected, actual)
 }
 

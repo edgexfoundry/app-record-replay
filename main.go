@@ -19,9 +19,8 @@ package main
 import (
 	"os"
 
-	"github.com/edgexfoundry/app-record-replay/internal/app"
-
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg"
+	"github.com/edgexfoundry/app-record-replay/internal/app"
 )
 
 const (

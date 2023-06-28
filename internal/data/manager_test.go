@@ -16,7 +16,6 @@
 package data
 
 import (
-	"context"
 	"testing"
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
@@ -25,12 +24,11 @@ import (
 )
 
 func TestNewManager(t *testing.T) {
-	target := NewManager(context.Background(), &mocks.ApplicationService{})
+	target := NewManager(&mocks.ApplicationService{})
 	require.NotNil(t, target)
 	d := target.(*dataManager)
 	require.NotNil(t, d)
 	assert.NotNil(t, d.dataChan)
-	assert.NotNil(t, d.ctx)
 }
 
 func TestDefaultDataManager_StartRecording(t *testing.T) {

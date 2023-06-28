@@ -17,7 +17,7 @@
 package data
 
 import (
-	"context"
+	"errors"
 
 	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
@@ -25,72 +25,73 @@ import (
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 )
 
+// dataManager implements interface that records and replays captured data
+type dataManager struct {
+	dataChan chan []coreDtos.Event
+	appSvc   appInterfaces.ApplicationService
+}
+
 // NewManager is the factory function which instantiates a Data Manager
-func NewManager(ctx context.Context, service appInterfaces.ApplicationService) interfaces.DataManager {
+func NewManager(service appInterfaces.ApplicationService) interfaces.DataManager {
 	return &dataManager{
 		dataChan: make(chan []coreDtos.Event, 1),
-		ctx:      ctx,
 		appSvc:   service,
 	}
 }
 
-// dataManager implements interface that records and replays captured data
-type dataManager struct {
-	dataChan chan []coreDtos.Event
-	ctx      context.Context
-	appSvc   appInterfaces.ApplicationService
-}
-
 // StartRecording starts a recording session based on the values in the request.
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
-func (m *dataManager) StartRecording(request dtos.RecordRequest) error {
+func (m *dataManager) StartRecording(request *dtos.RecordRequest) error {
 	//TODO implement me using TDD
-	panic("implement me")
+
+	// TODO: Use new appSrv.AppContext.Done() to exit from long-running recording function
+
+	return errors.New("not implemented")
 }
 
 // CancelRecording cancels the current recording session
-func (m *dataManager) CancelRecording() {
+func (m *dataManager) CancelRecording() error {
 	//TODO implement me using TDD
-	panic("implement me")
+	return errors.New("not implemented")
 }
 
 // RecordingStatus returns the status of the current recording session
-func (m *dataManager) RecordingStatus() dtos.RecordStatus {
+func (m *dataManager) RecordingStatus() (*dtos.RecordStatus, error) {
 	//TODO implement me using TDD
-	panic("implement me")
+	return nil, errors.New("not implemented")
 }
 
 // StartReplay starts a replay session based on the values in the request
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
-func (m *dataManager) StartReplay(request dtos.ReplayRequest) error {
+func (m *dataManager) StartReplay(request *dtos.ReplayRequest) error {
 	//TODO implement me using TDD
-	panic("implement me")
+	return errors.New("not implemented")
 }
 
 // CancelReplay cancels the current replay session
-func (m *dataManager) CancelReplay() {
+func (m *dataManager) CancelReplay() error {
 	//TODO implement me using TDD
-	panic("implement me")
+	return errors.New("not implemented")
 }
 
 // ReplayStatus returns the status of the current replay session
-func (m *dataManager) ReplayStatus() dtos.ReplayStatus {
+func (m *dataManager) ReplayStatus() (*dtos.ReplayStatus, error) {
 	//TODO implement me using TDD
-	panic("implement me")
+	return nil, errors.New("not implemented")
 }
 
 // ExportRecordedData returns the data for the last record session
 // An error is returned if the no record session was run or a record session is currently running
-func (m *dataManager) ExportRecordedData() (dtos.RecordedData, error) {
+func (m *dataManager) ExportRecordedData() (*dtos.RecordedData, error) {
 	//TODO implement me using TDD
-	panic("implement me")
+	return nil, errors.New("not implemented")
 }
 
 // ImportRecordedData imports data from a previously exported record session.
 // An error is returned if a record or replay session is currently running or the data is incomplete
-func (m *dataManager) ImportRecordedData(data dtos.RecordedData) error {
+func (m *dataManager) ImportRecordedData(data *dtos.RecordedData) error {
 	//TODO implement me using TDD
-	panic("implement me")
+	return errors.New("not implemented")
 }
 
 // Pipeline functions

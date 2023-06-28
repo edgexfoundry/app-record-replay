@@ -21,22 +21,22 @@ import "github.com/edgexfoundry/app-record-replay/pkg/dtos"
 type DataManager interface {
 	// StartRecording starts a recording session based on the values in the request.
 	// An error is returned if the request data is incomplete or a record or replay session is currently running.
-	StartRecording(request dtos.RecordRequest) error
+	StartRecording(request *dtos.RecordRequest) error
 	// CancelRecording cancels the current recording session
-	CancelRecording()
+	CancelRecording() error
 	// RecordingStatus returns the status of the current recording session
-	RecordingStatus() dtos.RecordStatus
+	RecordingStatus() (*dtos.RecordStatus, error)
 	// StartReplay starts a replay session based on the values in the request
 	// An error is returned if the request data is incomplete or a record or replay session is currently running.
-	StartReplay(request dtos.ReplayRequest) error
+	StartReplay(request *dtos.ReplayRequest) error
 	// CancelReplay cancels the current replay session
-	CancelReplay()
+	CancelReplay() error
 	// ReplayStatus returns the status of the current replay session
-	ReplayStatus() dtos.ReplayStatus
+	ReplayStatus() (*dtos.ReplayStatus, error)
 	// ExportRecordedData returns the data for the last record session
 	// An error is returned if the no record session was run or a record session is currently running
-	ExportRecordedData() (dtos.RecordedData, error)
+	ExportRecordedData() (*dtos.RecordedData, error)
 	// ImportRecordedData imports data from a previously exported record session.
 	// An error is returned if a record or replay session is currently running or the data is incomplete
-	ImportRecordedData(data dtos.RecordedData) error
+	ImportRecordedData(data *dtos.RecordedData) error
 }

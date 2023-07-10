@@ -135,8 +135,18 @@ func (c *httpController) cancelRecording(writer http.ResponseWriter, request *ht
 
 // recordingStatus returns the status of the current recording session
 func (c *httpController) recordingStatus(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	recordingStatus, err := c.dataManager.RecordingStatus()
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		c.lc.Errorf("failed to retreive recording stauts: %s", err)
+	}
+
+	jsonResponse, err := json.Marshal(recordingStatus)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		c.lc.Errorf("failed to marshal recording stauts: %s", err)
+	}
+	_, _ = writer.Write(jsonResponse)
 }
 
 // startReplay starts a replay session based on the values in the request

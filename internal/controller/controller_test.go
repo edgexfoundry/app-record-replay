@@ -170,7 +170,61 @@ func TestHttpController_StartRecording(t *testing.T) {
 }
 
 func TestHttpController_RecordingStatus(t *testing.T) {
-	// TODO: Implement using TDD
+	mockDataManager := &mocks.DataManager{}
+	mockSdk := &appMocks.ApplicationService{}
+	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
+
+	target := New(mockDataManager, mockSdk).(*httpController)
+
+	handler := http.HandlerFunc(target.recordingStatus)
+
+	inProgressRecordStatus := dtos.RecordStatus{
+		InProgress: true,
+		EventCount: 10,
+		Duration:   time.Second,
+	}
+	tests := []struct {
+		Name                         string
+		MockDataManagerStartResponse error
+		ExpectedResponse             *dtos.RecordStatus
+		ExpectedStatus               int
+		ExpectedError                error
+	}{
+		{
+			Name:             "Valid inprogess status test",
+			ExpectedResponse: &inProgressRecordStatus,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:           "retrieve status error",
+			ExpectedError:  errors.New("failed"),
+			ExpectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("RecordingStatus").Return(test.ExpectedResponse, test.ExpectedError).Once()
+			req, err := http.NewRequest(http.MethodGet, recordRoute, nil)
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+			if test.ExpectedStatus != http.StatusOK {
+				return
+			}
+
+			require.NotNil(t, testRecorder.Body)
+			actualResponse := dtos.RecordStatus{}
+			err = json.Unmarshal(testRecorder.Body.Bytes(), &actualResponse)
+			require.NoError(t, err)
+
+			require.Equal(t, test.ExpectedResponse, &actualResponse)
+		})
+	}
 }
 
 func TestHttpController_CancelRecording(t *testing.T) {

@@ -27,14 +27,18 @@ import (
 	appMocks "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
-	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
-	target := New(&mocks.DataManager{}, &appMocks.ApplicationService{}, &loggerMocks.LoggingClient{})
+	mockSdk := &appMocks.ApplicationService{}
+	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
+
+	target := New(&mocks.DataManager{}, mockSdk)
+
 	require.NotNil(t, target)
 	c := target.(*httpController)
 	require.NotNil(t, c)
@@ -46,8 +50,9 @@ func TestNew(t *testing.T) {
 func TestHttpController_AddRoutes_Success(t *testing.T) {
 	mockSdk := &appMocks.ApplicationService{}
 	mockSdk.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
 
-	target := New(nil, mockSdk, &loggerMocks.LoggingClient{})
+	target := New(nil, mockSdk)
 
 	err := target.AddRoutes()
 	require.NoError(t, err)
@@ -77,8 +82,9 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 			mockSdk := &appMocks.ApplicationService{}
 			mockSdk.On("AddRoute", test.Route, mock.Anything, test.Method).Return(expectedError)
 			mockSdk.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			mockSdk.On("LoggingClient").Return(logger.NewMockClient())
 
-			target := New(nil, mockSdk, &loggerMocks.LoggingClient{})
+			target := New(nil, mockSdk)
 
 			err := target.AddRoutes()
 			require.Error(t, err)
@@ -90,10 +96,11 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 }
 
 func TestHttpController_StartRecording(t *testing.T) {
-	// TODO: Complete Implementation using TDD
 	mockDataManager := &mocks.DataManager{}
 	mockSdk := &appMocks.ApplicationService{}
-	target := New(mockDataManager, mockSdk, &loggerMocks.LoggingClient{}).(*httpController)
+	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
+
+	target := New(mockDataManager, mockSdk).(*httpController)
 
 	handler := http.HandlerFunc(target.startRecording)
 
@@ -149,7 +156,7 @@ func TestHttpController_StartRecording(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			mockDataManager.On("StartRecording", validRequestDTO).Return(test.MockDataManagerStartResponse).Once()
+			mockDataManager.On("StartRecording", &validRequestDTO).Return(test.MockDataManagerStartResponse).Once()
 			req, err := http.NewRequest(http.MethodPost, recordRoute, bytes.NewReader(test.Input))
 			require.NoError(t, err)
 

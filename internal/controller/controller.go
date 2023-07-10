@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
-	interfaces2 "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
+	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
@@ -44,13 +44,13 @@ const (
 type httpController struct {
 	lc          logger.LoggingClient
 	dataManager interfaces.DataManager
-	appSdk      interfaces2.ApplicationService
+	appSdk      appInterfaces.ApplicationService
 }
 
 // New is the factory function which instantiates a new HTTP Controller
-func New(dataManager interfaces.DataManager, appSdk interfaces2.ApplicationService, lc logger.LoggingClient) interfaces.HttpController {
+func New(dataManager interfaces.DataManager, appSdk appInterfaces.ApplicationService) interfaces.HttpController {
 	return &httpController{
-		lc:          lc,
+		lc:          appSdk.LoggingClient(),
 		dataManager: dataManager,
 		appSdk:      appSdk,
 	}
@@ -84,15 +84,17 @@ func (c *httpController) AddRoutes() error {
 		return fmt.Errorf(failedRouteMessage, dataRoute, http.MethodPost, err)
 	}
 
+	c.lc.Info("Add Record & Replay routes")
+
 	return nil
 }
 
 // StartRecording starts a recording session based on the values in the request.
 // An error is returned if the request data is incomplete.
 func (c *httpController) startRecording(writer http.ResponseWriter, request *http.Request) {
-	startRequest := dtos.RecordRequest{}
+	startRequest := &dtos.RecordRequest{}
 
-	if err := json.NewDecoder(request.Body).Decode(&startRequest); err != nil {
+	if err := json.NewDecoder(request.Body).Decode(startRequest); err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
 		return

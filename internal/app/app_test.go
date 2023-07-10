@@ -38,6 +38,7 @@ func TestCreateAndRunService_Success(t *testing.T) {
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
+		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		mockAppService.On("Run").Return(nil)
 		return mockAppService, true
 	}
@@ -67,7 +68,8 @@ func TestCreateAndRunService_Run_Failed(t *testing.T) {
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
-		mockAppService.On("Run").Return(fmt.Errorf("Failed")).Run(func(args mock.Arguments) {
+		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		mockAppService.On("Run").Return(fmt.Errorf("failed")).Run(func(args mock.Arguments) {
 			RunCalled = true
 		})
 

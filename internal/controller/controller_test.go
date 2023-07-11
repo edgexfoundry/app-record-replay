@@ -250,7 +250,31 @@ func TestHttpController_ReplayStatus(t *testing.T) {
 }
 
 func TestHttpController_CancelReplay(t *testing.T) {
-	// TODO: Implement using TDD
+	target, mockDataManager, _ := createTargetAndMocks()
+
+	handler := http.HandlerFunc(target.cancelReplay)
+
+	tests := []struct {
+		Name           string
+		ExpectedStatus int
+		ExpectedError  error
+	}{
+		{"Valid", http.StatusAccepted, nil},
+		{"Error", http.StatusInternalServerError, errors.New("failed")},
+	}
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("CancelReplay").Return(test.ExpectedError).Once()
+
+			req, err := http.NewRequest(http.MethodGet, recordRoute, nil)
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+		})
+	}
 }
 
 func TestHttpController_ExportRecordedData(t *testing.T) {

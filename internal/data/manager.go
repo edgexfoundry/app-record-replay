@@ -27,8 +27,9 @@ import (
 
 // dataManager implements interface that records and replays captured data
 type dataManager struct {
-	dataChan chan []coreDtos.Event
-	appSvc   appInterfaces.ApplicationService
+	dataChan   chan []coreDtos.Event
+	appSvc     appInterfaces.ApplicationService
+	eventCount int
 }
 
 // NewManager is the factory function which instantiates a Data Manager
@@ -96,10 +97,23 @@ func (m *dataManager) ImportRecordedData(data *dtos.RecordedData) error {
 
 // Pipeline functions
 
-// countEvents counts the number of Events the function receives.
+var noDataError = errors.New("CountEvents function received nil data")
+var dataNotEvent = errors.New("CountEvents function received data that is not an Event")
+
+// countEvents counts the number of Events recorded so far. Must be called after any filters and before the Batch function.
+// This count is used when reporting Recording Status
 func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
-	//TODO implement me using TDD
-	return false, nil
+	if data == nil {
+		return false, noDataError
+	}
+
+	if _, ok := data.(coreDtos.Event); !ok {
+		return false, dataNotEvent
+	}
+
+	m.eventCount++
+
+	return true, data
 }
 
 // processBatchedData processes the batched data for the current recording session

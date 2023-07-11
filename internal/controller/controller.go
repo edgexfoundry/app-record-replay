@@ -39,8 +39,8 @@ const (
 	failedRecordDurationValidate   = "Record request failed validation: Duration must be > 0 when set"
 	failedRecordEventLimitValidate = "Record request failed validation: Event Limit must be > 0 when set"
 	failedRecording                = "Recording failed"
-	failedReplayRateValidate       = "Replay request failed validation: Replay Rate must be less than or greater than 0"
-	failedRepeatCountValidate      = "Replay request failed validation: Repeat Count must equal or greater than 0"
+	failedReplayRateValidate       = "Replay request failed validation: Replay Rate must be greater than 0"
+	failedRepeatCountValidate      = "Replay request failed validation: Repeat Count must be equal or greater than 0"
 	failedReplay                   = "Replay failed"
 )
 

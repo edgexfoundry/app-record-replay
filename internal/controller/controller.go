@@ -39,6 +39,9 @@ const (
 	failedRecordDurationValidate   = "Record request failed validation: Duration must be > 0 when set"
 	failedRecordEventLimitValidate = "Record request failed validation: Event Limit must be > 0 when set"
 	failedRecording                = "Recording failed"
+	failedReplayRateValidate       = "Replay request failed validation: Replay Rate must be greater than 0"
+	failedRepeatCountValidate      = "Replay request failed validation: Repeat Count must be equal or greater than 0"
+	failedReplay                   = "Replay failed"
 )
 
 type httpController struct {
@@ -161,8 +164,33 @@ func (c *httpController) recordingStatus(writer http.ResponseWriter, request *ht
 // startReplay starts a replay session based on the values in the request
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
 func (c *httpController) startReplay(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	startRequest := &dtos.ReplayRequest{}
+
+	if err := json.NewDecoder(request.Body).Decode(startRequest); err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
+		return
+	}
+
+	if startRequest.ReplayRate <= 0 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(failedReplayRateValidate))
+		return
+	}
+
+	if startRequest.RepeatCount < 0 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(failedRepeatCountValidate))
+		return
+	}
+
+	if err := c.dataManager.StartReplay(startRequest); err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedReplay, err)))
+		return
+	}
+
+	writer.WriteHeader(http.StatusAccepted)
 }
 
 // cancelReplay cancels the current replay session

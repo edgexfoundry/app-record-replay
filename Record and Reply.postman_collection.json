@@ -1,0 +1,256 @@
+{
+	"info": {
+		"_postman_id": "4ec49d64-e989-48fd-b63b-aa214ec482e7",
+		"name": "Record and Reply",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "6062813"
+	},
+	"item": [
+		{
+			"name": "Ping",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/ping",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"ping"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Start Recording",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"duration\" : 600000,\r\n    \"eventLimit\" : 100\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:59712/api/v3/record",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"record"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "Start Recording - empty request",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"duration\" : 600000,\r\n    \"eventLimit\" : 100\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "localhost:59712/api/v3/record",
+							"host": [
+								"localhost"
+							],
+							"port": "59712",
+							"path": [
+								"api",
+								"v3",
+								"record"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "Recording Status",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/record",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"record"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Cancel Recording",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/record",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"record"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Start Replay",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/replay",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"replay"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "Start Replay - empty request",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "localhost:59712/api/v3/replay",
+							"host": [
+								"localhost"
+							],
+							"port": "59712",
+							"path": [
+								"api",
+								"v3",
+								"replay"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "Replay Status",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/replay",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"replay"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Cancel Replay",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/replay",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"replay"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Export Recording",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/data",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"data"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Import Recording",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/data",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"data"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

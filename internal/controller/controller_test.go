@@ -145,7 +145,7 @@ func TestHttpController_StartRecording(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			mockDataManager.On("StartRecording", &validRequestDTO).Return(test.MockDataManagerStartResponse).Once()
+			mockDataManager.On("StartRecording", mock.Anything).Return(test.MockDataManagerStartResponse).Once()
 			req, err := http.NewRequest(http.MethodPost, recordRoute, bytes.NewReader(test.Input))
 			require.NoError(t, err)
 
@@ -242,7 +242,55 @@ func TestHttpController_CancelRecording(t *testing.T) {
 }
 
 func TestHttpController_StartReplay(t *testing.T) {
-	// TODO: Implement using TDD
+	target, mockDataManager, _ := createTargetAndMocks()
+
+	handler := http.HandlerFunc(target.startReplay)
+
+	validRequestDTO := dtos.ReplayRequest{
+		ReplayRate: 1,
+	}
+
+	invalidEmptyRequestDTO := dtos.ReplayRequest{}
+
+	invalidCountRequestDTO := dtos.ReplayRequest{
+		ReplayRate:  1.5,
+		RepeatCount: -1,
+	}
+
+	invalidRateRequestDTO := dtos.ReplayRequest{
+		ReplayRate:  0.0,
+		RepeatCount: 0,
+	}
+
+	tests := []struct {
+		Name                         string
+		Input                        []byte
+		MockDataManagerStartResponse error
+		ExpectedStatus               int
+		ExpectedMessage              string
+	}{
+		{"Success", marshal(t, validRequestDTO), nil, http.StatusAccepted, ""},
+		{"Recording failed", marshal(t, validRequestDTO), errors.New("replay failed"), http.StatusInternalServerError, failedReplay},
+		{"No Input", nil, nil, http.StatusBadRequest, failedRequestJSON},
+		{"Bad JSON Input", []byte("bad input"), nil, http.StatusBadRequest, failedRequestJSON},
+		{"Empty DTO Input", marshal(t, invalidEmptyRequestDTO), nil, http.StatusBadRequest, failedReplayRateValidate},
+		{"Bad Rate", marshal(t, invalidRateRequestDTO), nil, http.StatusBadRequest, failedReplayRateValidate},
+		{"Bad Count", marshal(t, invalidCountRequestDTO), nil, http.StatusBadRequest, failedRepeatCountValidate},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("StartReplay", mock.Anything).Return(test.MockDataManagerStartResponse).Once()
+			req, err := http.NewRequest(http.MethodPost, recordRoute, bytes.NewReader(test.Input))
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+			assert.Contains(t, testRecorder.Body.String(), test.ExpectedMessage)
+		})
+	}
 }
 
 func TestHttpController_ReplayStatus(t *testing.T) {

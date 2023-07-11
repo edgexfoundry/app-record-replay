@@ -172,7 +172,7 @@ func (c *httpController) startReplay(writer http.ResponseWriter, request *http.R
 		return
 	}
 
-	if startRequest.ReplayRate == 0 {
+	if startRequest.ReplayRate <= 0 {
 		writer.WriteHeader(http.StatusBadRequest)
 		_, _ = writer.Write([]byte(failedReplayRateValidate))
 		return

@@ -129,8 +129,13 @@ func (c *httpController) startRecording(writer http.ResponseWriter, request *htt
 
 // CancelRecording cancels the current recording session
 func (c *httpController) cancelRecording(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	if err := c.dataManager.CancelRecording(); err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to cancel recording: %v", err)))
+		return
+	}
+
+	writer.WriteHeader(http.StatusAccepted)
 }
 
 // recordingStatus returns the status of the current recording session
@@ -138,14 +143,18 @@ func (c *httpController) recordingStatus(writer http.ResponseWriter, request *ht
 	recordingStatus, err := c.dataManager.RecordingStatus()
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		c.lc.Errorf("failed to retreive recording stauts: %s", err)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to retrieve recording status: %v", err)))
+		return
 	}
 
 	jsonResponse, err := json.Marshal(recordingStatus)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		c.lc.Errorf("failed to marshal recording stauts: %s", err)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to marshal recording status: %s", err)))
+		return
 	}
+
+	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write(jsonResponse)
 }
 

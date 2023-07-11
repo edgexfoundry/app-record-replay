@@ -34,25 +34,18 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	mockSdk := &appMocks.ApplicationService{}
-	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
-
-	target := New(&mocks.DataManager{}, mockSdk)
+	target, _, _ := createTargetAndMocks()
 
 	require.NotNil(t, target)
-	c := target.(*httpController)
-	require.NotNil(t, c)
-	assert.NotNil(t, c.appSdk)
-	assert.NotNil(t, c.lc)
-	assert.NotNil(t, c.dataManager)
+	require.NotNil(t, target)
+	assert.NotNil(t, target.appSdk)
+	assert.NotNil(t, target.lc)
+	assert.NotNil(t, target.dataManager)
 }
 
 func TestHttpController_AddRoutes_Success(t *testing.T) {
-	mockSdk := &appMocks.ApplicationService{}
+	target, _, mockSdk := createTargetAndMocks()
 	mockSdk.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
-
-	target := New(nil, mockSdk)
 
 	err := target.AddRoutes()
 	require.NoError(t, err)
@@ -96,11 +89,7 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 }
 
 func TestHttpController_StartRecording(t *testing.T) {
-	mockDataManager := &mocks.DataManager{}
-	mockSdk := &appMocks.ApplicationService{}
-	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
-
-	target := New(mockDataManager, mockSdk).(*httpController)
+	target, mockDataManager, _ := createTargetAndMocks()
 
 	handler := http.HandlerFunc(target.startRecording)
 
@@ -170,11 +159,7 @@ func TestHttpController_StartRecording(t *testing.T) {
 }
 
 func TestHttpController_RecordingStatus(t *testing.T) {
-	mockDataManager := &mocks.DataManager{}
-	mockSdk := &appMocks.ApplicationService{}
-	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
-
-	target := New(mockDataManager, mockSdk).(*httpController)
+	target, mockDataManager, _ := createTargetAndMocks()
 
 	handler := http.HandlerFunc(target.recordingStatus)
 
@@ -191,7 +176,7 @@ func TestHttpController_RecordingStatus(t *testing.T) {
 		ExpectedError                error
 	}{
 		{
-			Name:             "Valid inprogess status test",
+			Name:             "Valid in progress status test",
 			ExpectedResponse: &inProgressRecordStatus,
 			ExpectedStatus:   http.StatusOK,
 			ExpectedError:    nil,
@@ -228,7 +213,32 @@ func TestHttpController_RecordingStatus(t *testing.T) {
 }
 
 func TestHttpController_CancelRecording(t *testing.T) {
-	// TODO: Implement using TDD
+	target, mockDataManager, _ := createTargetAndMocks()
+
+	handler := http.HandlerFunc(target.cancelRecording)
+
+	tests := []struct {
+		Name           string
+		ExpectedStatus int
+		ExpectedError  error
+	}{
+		{"Valid", http.StatusAccepted, nil},
+		{"Error", http.StatusInternalServerError, errors.New("failed")},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("CancelRecording").Return(test.ExpectedError).Once()
+
+			req, err := http.NewRequest(http.MethodGet, recordRoute, nil)
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+		})
+	}
 }
 
 func TestHttpController_StartReplay(t *testing.T) {
@@ -255,4 +265,13 @@ func marshal(t *testing.T, v any) []byte {
 	data, err := json.Marshal(v)
 	require.NoError(t, err)
 	return data
+}
+
+func createTargetAndMocks() (*httpController, *mocks.DataManager, *appMocks.ApplicationService) {
+	mockDataManager := &mocks.DataManager{}
+	mockSdk := &appMocks.ApplicationService{}
+	mockSdk.On("LoggingClient").Return(logger.NewMockClient())
+
+	target := New(mockDataManager, mockSdk).(*httpController)
+	return target, mockDataManager, mockSdk
 }

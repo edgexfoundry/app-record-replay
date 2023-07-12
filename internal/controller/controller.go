@@ -195,8 +195,13 @@ func (c *httpController) startReplay(writer http.ResponseWriter, request *http.R
 
 // cancelReplay cancels the current replay session
 func (c *httpController) cancelReplay(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	if err := c.dataManager.CancelReplay(); err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to cancel replay: %v", err)))
+		return
+	}
+
+	writer.WriteHeader(http.StatusAccepted)
 }
 
 // replayStatus returns the status of the current replay session

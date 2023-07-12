@@ -206,8 +206,22 @@ func (c *httpController) cancelReplay(writer http.ResponseWriter, request *http.
 
 // replayStatus returns the status of the current replay session
 func (c *httpController) replayStatus(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	replayStatus, err := c.dataManager.ReplayStatus()
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to retrieve replay status: %v", err)))
+		return
+	}
+
+	jsonResponse, err := json.Marshal(replayStatus)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to marshal replay status: %s", err)))
+		return
+	}
+
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(jsonResponse)
 }
 
 // exportRecordedData returns the data for the last record session

@@ -17,6 +17,7 @@ package data
 
 import (
 	"testing"
+	"time"
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
@@ -65,10 +66,6 @@ func TestDefaultDataManager_ImportRecordedData(t *testing.T) {
 }
 
 func TestDefaultDataManager_CountEvents(t *testing.T) {
-	// TODO: Implement using TDD
-	target := dataManager{}
-	target.countEvents(nil, nil)
-
 	tests := []struct {
 		Name          string
 		Data          any
@@ -76,8 +73,8 @@ func TestDefaultDataManager_CountEvents(t *testing.T) {
 		ExpectedError error
 	}{
 		{"Valid", dtos.Event{}, 5, nil},
-		{"Nil data", nil, 1, noDataError},
-		{"Not Event", dtos.Metric{}, 1, dataNotEvent},
+		{"Nil data", nil, 1, countsNoDataError},
+		{"Not Event", dtos.Metric{}, 1, countsDataNotEventError},
 	}
 
 	for _, test := range tests {
@@ -100,7 +97,43 @@ func TestDefaultDataManager_CountEvents(t *testing.T) {
 }
 
 func TestDefaultDataManager_ProcessBatchedData(t *testing.T) {
-	// TODO: Implement using TDD
-	target := dataManager{}
-	target.processBatchedData(nil, nil)
+	expectedBatchedEvents := []dtos.Event{
+		dtos.NewEvent("test-profile1", "test-device1", "test-source1"),
+		dtos.NewEvent("test-profile2", "test-device2", "test-source2"),
+		dtos.NewEvent("test-profile3", "test-device3", "test-source3"),
+		dtos.NewEvent("test-profile4", "test-device4", "test-source4"),
+	}
+
+	tests := []struct {
+		Name          string
+		Data          any
+		ExpectedError error
+	}{
+		{"Valid", expectedBatchedEvents, nil},
+		{"Nil data", nil, batchNoDataError},
+		{"Not Collection of Events", dtos.Event{}, batchDataNotEventCollectionError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("RemoveAllFunctionPipelines")
+
+			target := NewManager(mockSdk).(*dataManager)
+			target.recordingStartedAt = time.Now()
+
+			continueExecution, actual := target.processBatchedData(nil, test.Data)
+			if test.ExpectedError != nil {
+				require.Equal(t, test.ExpectedError, actual)
+				return
+			}
+
+			require.False(t, continueExecution)
+			require.NotNil(t, target.recordedData)
+			assert.Equal(t, expectedBatchedEvents, target.recordedData.Events)
+			assert.NotZero(t, target.recordedData.Duration)
+
+			mockSdk.AssertExpectations(t)
+		})
+	}
 }

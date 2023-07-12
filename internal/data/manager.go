@@ -18,6 +18,7 @@ package data
 
 import (
 	"errors"
+	"time"
 
 	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
@@ -25,11 +26,18 @@ import (
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 )
 
+type recordedData struct {
+	Events   []coreDtos.Event
+	Duration time.Duration
+}
+
 // dataManager implements interface that records and replays captured data
 type dataManager struct {
-	dataChan   chan []coreDtos.Event
-	appSvc     appInterfaces.ApplicationService
-	eventCount int
+	dataChan           chan []coreDtos.Event
+	appSvc             appInterfaces.ApplicationService
+	eventCount         int
+	recordingStartedAt time.Time
+	recordedData       *recordedData
 }
 
 // NewManager is the factory function which instantiates a Data Manager
@@ -97,18 +105,18 @@ func (m *dataManager) ImportRecordedData(data *dtos.RecordedData) error {
 
 // Pipeline functions
 
-var noDataError = errors.New("CountEvents function received nil data")
-var dataNotEvent = errors.New("CountEvents function received data that is not an Event")
+var countsNoDataError = errors.New("CountEvents function received nil data")
+var countsDataNotEventError = errors.New("CountEvents function received data that is not an Event")
 
 // countEvents counts the number of Events recorded so far. Must be called after any filters and before the Batch function.
 // This count is used when reporting Recording Status
 func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
 	if data == nil {
-		return false, noDataError
+		return false, countsNoDataError
 	}
 
 	if _, ok := data.(coreDtos.Event); !ok {
-		return false, dataNotEvent
+		return false, countsDataNotEventError
 	}
 
 	m.eventCount++
@@ -116,8 +124,27 @@ func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) 
 	return true, data
 }
 
+var batchNoDataError = errors.New("ProcessBatchedData function received nil data")
+var batchDataNotEventCollectionError = errors.New("ProcessBatchedData function received data that is not collection of Event")
+
 // processBatchedData processes the batched data for the current recording session
 func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
-	//TODO implement me using TDD
+	// This stops recording of Events
+	m.appSvc.RemoveAllFunctionPipelines()
+
+	if data == nil {
+		return false, batchNoDataError
+	}
+
+	events, ok := data.([]coreDtos.Event)
+	if !ok {
+		return false, batchDataNotEventCollectionError
+	}
+
+	m.recordedData = &recordedData{
+		Events:   events,
+		Duration: time.Since(m.recordingStartedAt),
+	}
+
 	return false, nil
 }

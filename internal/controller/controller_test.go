@@ -169,11 +169,10 @@ func TestHttpController_RecordingStatus(t *testing.T) {
 		Duration:   time.Second,
 	}
 	tests := []struct {
-		Name                         string
-		MockDataManagerStartResponse error
-		ExpectedResponse             *dtos.RecordStatus
-		ExpectedStatus               int
-		ExpectedError                error
+		Name             string
+		ExpectedResponse *dtos.RecordStatus
+		ExpectedStatus   int
+		ExpectedError    error
 	}{
 		{
 			Name:             "Valid in progress status test",
@@ -294,9 +293,71 @@ func TestHttpController_StartReplay(t *testing.T) {
 }
 
 func TestHttpController_ReplayStatus(t *testing.T) {
-	// TODO: Implement using TDD
-}
+	target, mockDataManager, _ := createTargetAndMocks()
 
+	handler := http.HandlerFunc(target.replayStatus)
+
+	notRunningReplayStatus := dtos.ReplayStatus{
+		Running:     false,
+		EventCount:  0,
+		Duration:    0,
+		RepeatCount: 0,
+	}
+
+	inProgressReplayStatus := dtos.ReplayStatus{
+		Running:     true,
+		EventCount:  4,
+		Duration:    time.Second,
+		RepeatCount: 1,
+	}
+	tests := []struct {
+		Name             string
+		ExpectedResponse *dtos.ReplayStatus
+		ExpectedStatus   int
+		ExpectedError    error
+	}{
+		{
+			Name:             "Valid in progress status test",
+			ExpectedResponse: &inProgressReplayStatus,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Valid not running replay status",
+			ExpectedResponse: &notRunningReplayStatus,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:           "retrieve status error",
+			ExpectedError:  errors.New("failed"),
+			ExpectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("ReplayStatus").Return(test.ExpectedResponse, test.ExpectedError).Once()
+			req, err := http.NewRequest(http.MethodGet, replayRoute, nil)
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+			if test.ExpectedStatus != http.StatusOK {
+				return
+			}
+
+			require.NotNil(t, testRecorder.Body)
+			actualResponse := dtos.ReplayStatus{}
+			err = json.Unmarshal(testRecorder.Body.Bytes(), &actualResponse)
+			require.NoError(t, err)
+
+			require.Equal(t, test.ExpectedResponse, &actualResponse)
+		})
+	}
+}
 func TestHttpController_CancelReplay(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 

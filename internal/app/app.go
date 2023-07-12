@@ -41,13 +41,20 @@ func (app *recordReplayApp) CreateAndRunAppService(serviceKey string, newService
 
 	app.lc = app.service.LoggingClient()
 
+	// Need to verify Core Metadata client is configured is now when the service can abort rather than later
+	// when the Core Metadata clients are needed and can't abort.
+	if app.service.DeviceClient() == nil {
+		app.lc.Errorf("Core Metadata client is missing. Please fix configuration and retry")
+		return -1
+	}
+
 	if err := controller.New(data.NewManager(app.service), app.service).AddRoutes(); err != nil {
-		app.lc.Errorf("adding routes failed: %s", err.Error())
+		app.lc.Errorf("Adding routes failed: %s", err.Error())
 		return -1
 	}
 
 	if err := app.service.Run(); err != nil {
-		app.lc.Errorf("running app service failed: %s", err.Error())
+		app.lc.Errorf("Running app service failed: %s", err.Error())
 		return -1
 	}
 

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	clientMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/interfaces/mocks"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -33,11 +34,12 @@ import (
 // Not to helpful for a simple main() , but can be if the main() has more complexity that should be unit tested
 
 func TestCreateAndRunService_Success(t *testing.T) {
-	app := recordReplayApp{}
+	app := New()
 
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
+		mockAppService.On("DeviceClient").Return(&clientMocks.DeviceClient{})
 		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		mockAppService.On("Run").Return(nil)
 		return mockAppService, true
@@ -49,7 +51,7 @@ func TestCreateAndRunService_Success(t *testing.T) {
 }
 
 func TestCreateAndRunService_NewService_Failed(t *testing.T) {
-	app := recordReplayApp{}
+	app := New()
 
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		return nil, false
@@ -59,8 +61,30 @@ func TestCreateAndRunService_NewService_Failed(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func TestCreateAndRunService_DeviceClient_Failed(t *testing.T) {
+	app := New()
+
+	// ensure failure is from DeviceClient()
+	DeviceClientCalled := false
+
+	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
+		mockAppService := &mocks.ApplicationService{}
+		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
+		mockAppService.On("DeviceClient").Return(nil).Run(func(args mock.Arguments) {
+			DeviceClientCalled = true
+		})
+
+		return mockAppService, true
+	}
+
+	expected := -1
+	actual := app.CreateAndRunAppService("TestKey", mockFactory)
+	assert.Equal(t, expected, actual)
+	require.True(t, DeviceClientCalled, "DeviceClient never called")
+}
+
 func TestCreateAndRunService_Run_Failed(t *testing.T) {
-	app := recordReplayApp{}
+	app := New()
 
 	// ensure failure is from Run
 	RunCalled := false
@@ -68,6 +92,7 @@ func TestCreateAndRunService_Run_Failed(t *testing.T) {
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
+		mockAppService.On("DeviceClient").Return(&clientMocks.DeviceClient{})
 		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		mockAppService.On("Run").Return(fmt.Errorf("failed")).Run(func(args mock.Arguments) {
 			RunCalled = true

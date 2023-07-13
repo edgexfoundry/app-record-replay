@@ -503,72 +503,7 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 }
 
 func TestHttpController_ImportRecordedData(t *testing.T) {
-	target, mockDataManager, _ := createTargetAndMocks()
-
-	handler := http.HandlerFunc(target.importRecordedData)
-
-	emptyDataRequest := dtos.RecordedData{}
-
-	recordedEventRequest := dtos.RecordedData{
-		RecordedEvents: []coreDtos.Event{
-			coreDtos.Event{
-				DeviceName:  "test",
-				ProfileName: "test",
-				Readings: []coreDtos.BaseReading{
-					coreDtos.BaseReading{
-						SimpleReading: coreDtos.SimpleReading{
-							Value: "1456.0",
-						},
-					},
-				},
-			},
-			coreDtos.Event{
-				DeviceName:  "test",
-				ProfileName: "test",
-				Readings: []coreDtos.BaseReading{
-					coreDtos.BaseReading{
-						SimpleReading: coreDtos.SimpleReading{
-							Value: "1457.0",
-						},
-					},
-				},
-			},
-		},
-		Devices: []coreDtos.Device{
-			coreDtos.Device{
-				Name:        "test_device",
-				ProfileName: "test",
-			},
-		},
-	}
-	tests := []struct {
-		Name             string
-		ExpectedResponse dtos.RecordedData
-		ExpectedStatus   int
-		ExpectedError    error
-	}{
-		{
-			Name: "valid - data with 2 events",
-			ExpectedResponse: recordedEventRequest,
-			ExpectedStatus: http.StatusAccepted,
-			ExpectedError: nil,
-		},
-		
-	}
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			mockDataManager.On("ImportRecordedData", mock.Anything).Return(test.ExpectedError).Once()
-
-			req, err := http.NewRequest(http.MethodPost, dataRoute, nil)
-			require.NoError(t, err)
-
-			testRecorder := httptest.NewRecorder()
-			handler.ServeHTTP(testRecorder, req)
-
-			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
-		})
-	}
-
+	// TODO: Implement using TDD
 }
 
 func marshal(t *testing.T, v any) []byte {

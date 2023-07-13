@@ -28,6 +28,7 @@ import (
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
+	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -387,7 +388,88 @@ func TestHttpController_CancelReplay(t *testing.T) {
 }
 
 func TestHttpController_ExportRecordedData(t *testing.T) {
-	// TODO: Implement using TDD
+	target, mockDataManager, _ := createTargetAndMocks()
+
+	handler := http.HandlerFunc(target.exportRecordedData)
+
+	noRecordedEvents := dtos.RecordedData{}
+
+	recordedEvents := dtos.RecordedData{
+		RecordedEvents: []coreDtos.Event{
+			coreDtos.Event{
+				DeviceName:  "test",
+				ProfileName: "test",
+				Readings: []coreDtos.BaseReading{
+					coreDtos.BaseReading{
+						SimpleReading: coreDtos.SimpleReading{
+							Value: "1456.0",
+						},
+					},
+				},
+			},
+			coreDtos.Event{
+				DeviceName:  "test",
+				ProfileName: "test",
+				Readings: []coreDtos.BaseReading{
+					coreDtos.BaseReading{
+						SimpleReading: coreDtos.SimpleReading{
+							Value: "1457.0",
+						},
+					},
+				},
+			},
+		},
+		Devices: []coreDtos.Device{
+			coreDtos.Device{
+				Name:        "test_device",
+				ProfileName: "test",
+			},
+		},
+	}
+
+	tests := []struct {
+		Name             string
+		ExpectedResponse *dtos.RecordedData
+		ExpectedStatus   int
+		ExpectedError    error
+	}{
+		{
+			Name:             "Valid - 2 events",
+			ExpectedResponse: &recordedEvents,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Valid - no events",
+			ExpectedResponse: &noRecordedEvents,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("ExportRecordedData").Return(test.ExpectedResponse, test.ExpectedError).Once()
+
+			req, err := http.NewRequest(http.MethodGet, dataRoute, nil)
+			require.NoError(t, err)
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+			if test.ExpectedStatus != http.StatusOK {
+				return
+			}
+
+			require.NotNil(t, testRecorder.Body)
+			actualResponse := dtos.RecordedData{}
+			err = json.Unmarshal(testRecorder.Body.Bytes(), &actualResponse)
+			require.NoError(t, err)
+
+			require.Equal(t, test.ExpectedResponse, &actualResponse)
+
+		})
+	}
 }
 
 func TestHttpController_ImportRecordedData(t *testing.T) {

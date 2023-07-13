@@ -227,8 +227,22 @@ func (c *httpController) replayStatus(writer http.ResponseWriter, request *http.
 // exportRecordedData returns the data for the last record session
 // An error is returned if the no record session was run or a record session is currently running
 func (c *httpController) exportRecordedData(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	recordedData, err := c.dataManager.ExportRecordedData()
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to export recorded data: %v", err)))
+		return
+	}
+
+	jsonResponse, err := json.Marshal(recordedData)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to marshal recorded data: %s", err)))
+		return
+	}
+
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(jsonResponse)
 }
 
 // importRecordedData imports data from a previously exported record session.

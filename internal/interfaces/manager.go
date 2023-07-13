@@ -38,5 +38,5 @@ type DataManager interface {
 	ExportRecordedData() (*dtos.RecordedData, error)
 	// ImportRecordedData imports data from a previously exported record session.
 	// An error is returned if a record or replay session is currently running or the data is incomplete
-	ImportRecordedData(data *dtos.RecordedData) error
+	ImportRecordedData(data *dtos.RecordedData, overwrite bool) error
 }

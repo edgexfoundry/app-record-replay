@@ -67,13 +67,13 @@ func (_m *DataManager) ExportRecordedData() (*dtos.RecordedData, error) {
 	return r0, r1
 }
 
-// ImportRecordedData provides a mock function with given fields: data
-func (_m *DataManager) ImportRecordedData(data *dtos.RecordedData) error {
-	ret := _m.Called(data)
+// ImportRecordedData provides a mock function with given fields: data, overwrite
+func (_m *DataManager) ImportRecordedData(data *dtos.RecordedData, overwrite bool) error {
+	ret := _m.Called(data, overwrite)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*dtos.RecordedData) error); ok {
-		r0 = rf(data)
+	if rf, ok := ret.Get(0).(func(*dtos.RecordedData, bool) error); ok {
+		r0 = rf(data, overwrite)
 	} else {
 		r0 = ret.Error(0)
 	}

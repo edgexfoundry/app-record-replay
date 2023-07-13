@@ -50,6 +50,7 @@ const (
 	noCompression   = ""
 	zlibCompression = "ZLIB"
 	gzipCompression = "GZIP"
+	failedImportingData            = "Import data failed"
 )
 
 type httpController struct {
@@ -288,6 +289,19 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 // importRecordedData imports data from a previously exported record session.
 // An error is returned if a record or replay session is currently running or the data is incomplete
 func (c *httpController) importRecordedData(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	recordDataRequest := &dtos.RecordedData{}
+
+	if err := json.NewDecoder(request.Body).Decode(recordDataRequest); err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
+		return
+	}
+
+	if err := c.dataManager.ImportRecordedData(recordDataRequest); err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedImportingData, err)))
+		return
+	}
+
+	writer.WriteHeader(http.StatusAccepted)
 }

@@ -16,9 +16,12 @@
 package controller
 
 import (
+	"compress/gzip"
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 
 	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
@@ -42,6 +45,11 @@ const (
 	failedReplayRateValidate       = "Replay request failed validation: Replay Rate must be greater than 0"
 	failedRepeatCountValidate      = "Replay request failed validation: Repeat Count must be equal or greater than 0"
 	failedReplay                   = "Replay failed"
+	failedDataCompression          = "failed to compress recorded data of type"
+
+	noCompression   = ""
+	zlibCompression = "ZLIB"
+	gzipCompression = "GZIP"
 )
 
 type httpController struct {
@@ -227,8 +235,64 @@ func (c *httpController) replayStatus(writer http.ResponseWriter, request *http.
 // exportRecordedData returns the data for the last record session
 // An error is returned if the no record session was run or a record session is currently running
 func (c *httpController) exportRecordedData(writer http.ResponseWriter, request *http.Request) {
-	//TODO implement me using TDD
-	writer.WriteHeader(http.StatusNotImplemented)
+	recordedData, err := c.dataManager.ExportRecordedData()
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("failed to export recorded data: %v", err)))
+		return
+	}
+
+	if reflect.DeepEqual(recordedData, &dtos.RecordedData{}) {
+		writer.WriteHeader(http.StatusNoContent)
+		_, _ = writer.Write([]byte("no recorded data found"))
+		return
+	}
+
+	compression := request.URL.Query().Get("compression")
+	switch compression {
+	case noCompression:
+		jsonResponse, err := json.Marshal(recordedData)
+		if err != nil {
+			writer.WriteHeader(http.StatusInternalServerError)
+			_, _ = writer.Write([]byte("failed to marshal recorded data"))
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(jsonResponse)
+
+	case zlibCompression:
+		writer.Header().Set("Content-Encoding", "ZLIB")
+		writer.Header().Set("Content-Type", "application/json")
+		zlibWriter := zlib.NewWriter(writer)
+		defer zlibWriter.Close()
+		err = json.NewEncoder(zlibWriter).Encode(&recordedData)
+		if err != nil {
+			writer.WriteHeader(http.StatusInternalServerError)
+			_, _ = writer.Write([]byte(fmt.Sprintf("%s %s: %s", failedDataCompression, zlibCompression, err)))
+			return
+		}
+		writer.WriteHeader(http.StatusOK)
+
+	case gzipCompression:
+		writer.Header().Set("Content-Encoding", "GZIP")
+		writer.Header().Set("Content-Type", "application/json")
+		gZipWriter := gzip.NewWriter(writer)
+		defer gZipWriter.Close()
+		err = json.NewEncoder(gZipWriter).Encode(&recordedData)
+		if err != nil {
+			writer.WriteHeader(http.StatusInternalServerError)
+			_, _ = writer.Write([]byte(fmt.Sprintf("%s %s: %s", failedDataCompression, gzipCompression, err)))
+			return
+		}
+		writer.WriteHeader(http.StatusOK)
+
+	default:
+		writer.WriteHeader(http.StatusInternalServerError)
+		_, _ = writer.Write([]byte(fmt.Sprintf("compression format not available: %s", compression)))
+		return
+	}
+
 }
 
 // importRecordedData imports data from a previously exported record session.

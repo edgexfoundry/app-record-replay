@@ -17,8 +17,11 @@ package controller
 
 import (
 	"bytes"
+	"compress/gzip"
+	"compress/zlib"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,6 +31,7 @@ import (
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
+	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -387,7 +391,125 @@ func TestHttpController_CancelReplay(t *testing.T) {
 }
 
 func TestHttpController_ExportRecordedData(t *testing.T) {
-	// TODO: Implement using TDD
+	target, mockDataManager, _ := createTargetAndMocks()
+
+	handler := http.HandlerFunc(target.exportRecordedData)
+
+	noRecordedData := dtos.RecordedData{}
+
+	recordedData := dtos.RecordedData{
+		RecordedEvents: []coreDtos.Event{
+			coreDtos.Event{
+				DeviceName:  "test",
+				ProfileName: "test",
+				Readings: []coreDtos.BaseReading{
+					coreDtos.BaseReading{
+						SimpleReading: coreDtos.SimpleReading{
+							Value: "1456.0",
+						},
+					},
+				},
+			},
+			coreDtos.Event{
+				DeviceName:  "test",
+				ProfileName: "test",
+				Readings: []coreDtos.BaseReading{
+					coreDtos.BaseReading{
+						SimpleReading: coreDtos.SimpleReading{
+							Value: "1457.0",
+						},
+					},
+				},
+			},
+		},
+		Devices: []coreDtos.Device{
+			coreDtos.Device{
+				Name:        "test_device",
+				ProfileName: "test",
+			},
+		},
+		Profiles: []coreDtos.DeviceProfile{
+			coreDtos.DeviceProfile{
+				DeviceProfileBasicInfo: coreDtos.DeviceProfileBasicInfo{
+					Name: "test",
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		Name             string
+		ExpectedResponse *dtos.RecordedData
+		ExpectedStatus   int
+		ExpectedError    error
+		QueryParam       string
+	}{
+		{
+			Name:             "Valid with data",
+			ExpectedResponse: &recordedData,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Valid - no events",
+			ExpectedResponse: &noRecordedData,
+			ExpectedStatus:   http.StatusNoContent,
+			ExpectedError:    nil,
+		},
+		{
+			Name:             "Valid with data with GZIP query parameter",
+			ExpectedResponse: &recordedData,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+			QueryParam:       "GZIP",
+		},
+		{
+			Name:             "Valid with data with ZLIB query parameter",
+			ExpectedResponse: &recordedData,
+			ExpectedStatus:   http.StatusOK,
+			ExpectedError:    nil,
+			QueryParam:       "ZLIB",
+		},
+		{
+			Name:             "Valid with data with invalid GZ query parameter",
+			ExpectedResponse: &recordedData,
+			ExpectedStatus:   http.StatusInternalServerError,
+			ExpectedError:    nil,
+			QueryParam:       "GZ",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDataManager.On("ExportRecordedData").Return(test.ExpectedResponse, test.ExpectedError).Once()
+
+			req, err := http.NewRequest(http.MethodGet, dataRoute, nil)
+			require.NoError(t, err)
+
+			query := req.URL.Query()
+			query.Add("compression", test.QueryParam)
+			req.URL.RawQuery = query.Encode()
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+			if test.ExpectedStatus != http.StatusOK {
+				return
+			}
+
+			require.NotNil(t, testRecorder.Body)
+			actualResponse := &dtos.RecordedData{}
+			if test.QueryParam == "" {
+				err = json.Unmarshal(testRecorder.Body.Bytes(), actualResponse)
+				require.NoError(t, err)
+			} else {
+				actualResponse = uncompressData(t, test.QueryParam, testRecorder.Body)
+			}
+
+			require.Equal(t, test.ExpectedResponse, actualResponse)
+
+		})
+	}
 }
 
 func TestHttpController_ImportRecordedData(t *testing.T) {
@@ -407,4 +529,25 @@ func createTargetAndMocks() (*httpController, *mocks.DataManager, *appMocks.Appl
 
 	target := New(mockDataManager, mockSdk).(*httpController)
 	return target, mockDataManager, mockSdk
+}
+
+func uncompressData(t *testing.T, compressionType string, r io.Reader) *dtos.RecordedData {
+	data := dtos.RecordedData{}
+	switch compressionType {
+	case "GZIP":
+		reader, err := gzip.NewReader(r)
+		require.NoError(t, err)
+		defer reader.Close()
+		err = json.NewDecoder(reader).Decode(&data)
+		require.NoError(t, err)
+	case "ZLIB":
+		reader, err := zlib.NewReader(r)
+		require.NoError(t, err)
+		defer reader.Close()
+		err = json.NewDecoder(reader).Decode(&data)
+		require.NoError(t, err)
+	}
+
+	return &data
+	// PanicIfErr(json.NewDecoder(gr).Decode(&t))
 }

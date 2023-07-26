@@ -38,6 +38,7 @@ const (
 
 var recordingInProgressError = errors.New("a recording is already in progress")
 var batchParametersNotSetError = errors.New("duration and/or count not set")
+var noRecordingRunningToCancelError = errors.New("no recording currently running")
 
 type recordedData struct {
 	Events   []coreDtos.Event
@@ -123,9 +124,7 @@ func (m *dataManager) StartRecording(request *dtos.RecordRequest) error {
 		batch, err = transforms.NewBatchByCount(request.EventLimit)
 	} else if request.Duration > 0 {
 		batch, err = transforms.NewBatchByTime(request.Duration.String())
-	}
-
-	if batch == nil {
+	} else {
 		err = batchParametersNotSetError
 	}
 
@@ -155,8 +154,20 @@ func (m *dataManager) StartRecording(request *dtos.RecordRequest) error {
 
 // CancelRecording cancels the current recording session
 func (m *dataManager) CancelRecording() error {
-	//TODO implement me using TDD
-	return errors.New("not implemented")
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	if m.recordingStartedAt == nil {
+		return noRecordingRunningToCancelError
+	}
+
+	// This stops recording of Events
+	m.appSvc.RemoveAllFunctionPipelines()
+	m.recordingStartedAt = nil
+
+	m.appSvc.LoggingClient().Debug("ARR Cancel Recording: Recording of Events has been canceled")
+
+	return nil
 }
 
 // RecordingStatus returns the status of the current recording session
@@ -231,6 +242,14 @@ var batchDataNotEventCollectionError = errors.New("ProcessBatchedData function r
 func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
 	lc := m.appSvc.LoggingClient()
 
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	// Check if record was canceled and exit early
+	if m.recordingStartedAt == nil {
+		return false, nil
+	}
+
 	// This stops recording of Events
 	m.appSvc.RemoveAllFunctionPipelines()
 	lc.Debug("ARR Process Recorded Data: Recording of Events has ended and functions pipeline has been removed")
@@ -243,9 +262,6 @@ func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, dat
 	if !ok {
 		return false, batchDataNotEventCollectionError
 	}
-
-	m.recordingMutex.Lock()
-	defer m.recordingMutex.Unlock()
 
 	duration := 0 * time.Second
 	if m.recordingStartedAt != nil {

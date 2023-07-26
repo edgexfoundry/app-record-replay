@@ -123,9 +123,7 @@ func (m *dataManager) StartRecording(request *dtos.RecordRequest) error {
 		batch, err = transforms.NewBatchByCount(request.EventLimit)
 	} else if request.Duration > 0 {
 		batch, err = transforms.NewBatchByTime(request.Duration.String())
-	}
-
-	if batch == nil {
+	} else {
 		err = batchParametersNotSetError
 	}
 

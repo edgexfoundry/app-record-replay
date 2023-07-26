@@ -184,11 +184,6 @@ func TestHttpController_RecordingStatus(t *testing.T) {
 			ExpectedStatus:   http.StatusOK,
 			ExpectedError:    nil,
 		},
-		{
-			Name:           "retrieve status error",
-			ExpectedError:  errors.New("failed"),
-			ExpectedStatus: http.StatusInternalServerError,
-		},
 	}
 
 	for _, test := range tests {

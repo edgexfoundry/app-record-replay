@@ -151,12 +151,7 @@ func (c *httpController) cancelRecording(writer http.ResponseWriter, request *ht
 
 // recordingStatus returns the status of the current recording session
 func (c *httpController) recordingStatus(writer http.ResponseWriter, request *http.Request) {
-	recordingStatus, err := c.dataManager.RecordingStatus()
-	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("failed to retrieve recording status: %v", err)))
-		return
-	}
+	recordingStatus := c.dataManager.RecordingStatus()
 
 	jsonResponse, err := json.Marshal(recordingStatus)
 	if err != nil {

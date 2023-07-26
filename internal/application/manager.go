@@ -171,9 +171,22 @@ func (m *dataManager) CancelRecording() error {
 }
 
 // RecordingStatus returns the status of the current recording session
-func (m *dataManager) RecordingStatus() (*dtos.RecordStatus, error) {
-	//TODO implement me using TDD
-	return nil, errors.New("not implemented")
+func (m *dataManager) RecordingStatus() *dtos.RecordStatus {
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	status := &dtos.RecordStatus{}
+
+	if m.recordingStartedAt != nil {
+		status.InProgress = true
+		status.Duration = time.Since(*m.recordingStartedAt)
+		status.EventCount = m.eventCount
+	} else if m.recordedData != nil {
+		status.Duration = m.recordedData.Duration
+		status.EventCount = len(m.recordedData.Events)
+	}
+
+	return status
 }
 
 // StartReplay starts a replay session based on the values in the request

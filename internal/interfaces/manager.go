@@ -25,7 +25,7 @@ type DataManager interface {
 	// CancelRecording cancels the current recording session
 	CancelRecording() error
 	// RecordingStatus returns the status of the current recording session
-	RecordingStatus() (*dtos.RecordStatus, error)
+	RecordingStatus() *dtos.RecordStatus
 	// StartReplay starts a replay session based on the values in the request
 	// An error is returned if the request data is incomplete or a record or replay session is currently running.
 	StartReplay(request *dtos.ReplayRequest) error

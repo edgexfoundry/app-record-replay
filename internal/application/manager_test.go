@@ -250,10 +250,10 @@ func TestDefaultDataManager_RecordingStatus(t *testing.T) {
 				for i := 0; i < test.ExpectedStatus.EventCount; i++ {
 					target.recordedData.Events = append(target.recordedData.Events, coreDtos.Event{})
 				}
-			} else {
-				// default case is when recording is not in progress & no previous recorded data exists
-				// Nothing to set up.
 			}
+
+			// default case (neither conditions above) is when recording is not in progress & no previous recorded data exists
+			// Nothing to set up.
 
 			actual := target.RecordingStatus()
 

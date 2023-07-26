@@ -18,8 +18,8 @@ package app
 
 import (
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
+	"github.com/edgexfoundry/app-record-replay/internal/application"
 	"github.com/edgexfoundry/app-record-replay/internal/controller"
-	"github.com/edgexfoundry/app-record-replay/internal/data"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
 )
 
@@ -48,7 +48,7 @@ func (app *recordReplayApp) CreateAndRunAppService(serviceKey string, newService
 		return -1
 	}
 
-	if err := controller.New(data.NewManager(app.service), app.service).AddRoutes(); err != nil {
+	if err := controller.New(application.NewManager(app.service), app.service).AddRoutes(); err != nil {
 		app.lc.Errorf("Adding routes failed: %s", err.Error())
 		return -1
 	}

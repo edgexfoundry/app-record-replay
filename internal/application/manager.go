@@ -14,17 +14,30 @@
 // limitations under the License.
 //
 
-package data
+package application
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
 	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
+	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/transforms"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 )
+
+const (
+	createBatchFailedMessage           = "failed to create Batch pipeline function"
+	setPipelineFailedMessage           = "failed to set the default function pipeline"
+	debugFilterMessage                 = "ARR Start Recording: Filter %s names %v function added to the functions pipeline"
+	debugPipelineFunctionsAddedMessage = "ARR Start Recording: CountEvents, Batch and ProcessBatchedData functions added to the functions pipeline"
+)
+
+var recordingInProgressError = errors.New("a recording is already in progress")
+var batchParametersNotSetError = errors.New("duration and/or count not set")
 
 type recordedData struct {
 	Events   []coreDtos.Event
@@ -36,8 +49,9 @@ type dataManager struct {
 	dataChan           chan []coreDtos.Event
 	appSvc             appInterfaces.ApplicationService
 	eventCount         int
-	recordingStartedAt time.Time
+	recordingStartedAt *time.Time
 	recordedData       *recordedData
+	recordingMutex     sync.Mutex
 }
 
 // NewManager is the factory function which instantiates a Data Manager
@@ -51,11 +65,90 @@ func NewManager(service appInterfaces.ApplicationService) interfaces.DataManager
 // StartRecording starts a recording session based on the values in the request.
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
 func (m *dataManager) StartRecording(request *dtos.RecordRequest) error {
-	//TODO implement me using TDD
+	lc := m.appSvc.LoggingClient()
 
-	// TODO: Use new appSrv.AppContext.Done() to exit from long-running recording function
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
 
-	return errors.New("not implemented")
+	if m.recordingStartedAt != nil {
+		return recordingInProgressError
+	}
+	m.recordedData = nil
+	m.eventCount = 0
+
+	var pipeline []appInterfaces.AppFunction
+
+	if len(request.IncludeDeviceProfiles) > 0 {
+		includeFilter := transforms.NewFilterFor(request.IncludeDeviceProfiles)
+		pipeline = append(pipeline, includeFilter.FilterByProfileName)
+		lc.Debugf(debugFilterMessage, "for profile", request.IncludeDeviceProfiles)
+	}
+
+	if len(request.ExcludeDeviceProfiles) > 0 {
+		excludeFilter := transforms.NewFilterOut(request.ExcludeDeviceProfiles)
+		pipeline = append(pipeline, excludeFilter.FilterByProfileName)
+		lc.Debugf(debugFilterMessage, "out profile", request.ExcludeDeviceProfiles)
+	}
+
+	if len(request.IncludeDevices) > 0 {
+		includeFilter := transforms.NewFilterFor(request.IncludeDevices)
+		pipeline = append(pipeline, includeFilter.FilterByDeviceName)
+		lc.Debugf(debugFilterMessage, "for device", request.IncludeDevices)
+	}
+
+	if len(request.ExcludeDevices) > 0 {
+		excludeFilter := transforms.NewFilterOut(request.ExcludeDevices)
+		pipeline = append(pipeline, excludeFilter.FilterByDeviceName)
+		lc.Debugf(debugFilterMessage, "out device", request.ExcludeDevices)
+	}
+
+	if len(request.IncludeSources) > 0 {
+		includeFilter := transforms.NewFilterFor(request.IncludeSources)
+		pipeline = append(pipeline, includeFilter.FilterBySourceName)
+		lc.Debugf(debugFilterMessage, "for source", request.IncludeSources)
+	}
+
+	if len(request.ExcludeSources) > 0 {
+		excludeFilter := transforms.NewFilterOut(request.ExcludeSources)
+		pipeline = append(pipeline, excludeFilter.FilterBySourceName)
+		lc.Debugf(debugFilterMessage, "out source", request.ExcludeSources)
+	}
+
+	var batch *transforms.BatchConfig
+	var err error
+
+	if request.Duration > 0 && request.EventLimit > 0 {
+		batch, err = transforms.NewBatchByTimeAndCount(request.Duration.String(), request.EventLimit)
+	} else if request.EventLimit > 0 {
+		batch, err = transforms.NewBatchByCount(request.EventLimit)
+	} else if request.Duration > 0 {
+		batch, err = transforms.NewBatchByTime(request.Duration.String())
+	} else {
+		err = batchParametersNotSetError
+	}
+
+	if err != nil {
+		return fmt.Errorf("%s: %v", createBatchFailedMessage, err)
+	}
+
+	// processBatchedData expects slice of Events, so configure batch to return slice of Events
+	batch.IsEventData = true
+
+	pipeline = append(pipeline, m.countEvents, batch.Batch, m.processBatchedData)
+	lc.Debug(debugPipelineFunctionsAddedMessage)
+
+	// Setting the Functions Pipeline starts the recording of Events
+	err = m.appSvc.SetDefaultFunctionsPipeline(pipeline...)
+	if err != nil {
+		return fmt.Errorf("%s: %v", setPipelineFailedMessage, err)
+	}
+
+	now := time.Now()
+	m.recordingStartedAt = &now
+
+	lc.Debugf("ARR Start Recording: Recording of Events has started with EventLimit=%d and Duration=%s", request.EventLimit, request.Duration.String())
+
+	return nil
 }
 
 // CancelRecording cancels the current recording session
@@ -119,7 +212,12 @@ func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) 
 		return false, countsDataNotEventError
 	}
 
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
 	m.eventCount++
+
+	m.appSvc.LoggingClient().Debugf("ARR Event Count: received event to be recorded. Current event count is %d", m.eventCount)
 
 	return true, data
 }
@@ -129,8 +227,11 @@ var batchDataNotEventCollectionError = errors.New("ProcessBatchedData function r
 
 // processBatchedData processes the batched data for the current recording session
 func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
+	lc := m.appSvc.LoggingClient()
+
 	// This stops recording of Events
 	m.appSvc.RemoveAllFunctionPipelines()
+	lc.Debug("ARR Process Recorded Data: Recording of Events has ended and functions pipeline has been removed")
 
 	if data == nil {
 		return false, batchNoDataError
@@ -141,10 +242,22 @@ func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, dat
 		return false, batchDataNotEventCollectionError
 	}
 
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	duration := 0 * time.Second
+	if m.recordingStartedAt != nil {
+		duration = time.Since(*m.recordingStartedAt)
+	}
+
 	m.recordedData = &recordedData{
 		Events:   events,
-		Duration: time.Since(m.recordingStartedAt),
+		Duration: duration,
 	}
+
+	m.recordingStartedAt = nil
+
+	lc.Debugf("ARR Process Recorded Data: %d events in %s have been saved for replay", len(events), duration.String())
 
 	return false, nil
 }

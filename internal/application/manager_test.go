@@ -206,7 +206,48 @@ func TestDefaultDataManager_RecordingStatus(t *testing.T) {
 }
 
 func TestDefaultDataManager_CancelRecording(t *testing.T) {
-	// TODO: Implement using TDD
+	tests := []struct {
+		Name             string
+		RecordingRunning bool
+		ExpectedError    error
+	}{
+		{
+			Name:             "Happy Path - Running recording canceled",
+			RecordingRunning: true,
+		},
+		{
+			Name:             "Error Path - No recording running to be canceled",
+			RecordingRunning: false,
+			ExpectedError:    noRecordingRunningToCancelError,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debug", mock.Anything)
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("RemoveAllFunctionPipelines")
+			target := NewManager(mockSdk).(*dataManager)
+
+			if test.RecordingRunning {
+				now := time.Now()
+				target.recordingStartedAt = &now
+			}
+
+			err := target.CancelRecording()
+			if test.ExpectedError != nil {
+				assert.Equal(t, err, test.ExpectedError)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Nil(t, target.recordingStartedAt)
+
+			mockSdk.AssertExpectations(t)
+		})
+	}
 }
 
 func TestDefaultDataManager_StartReplay(t *testing.T) {
@@ -274,13 +315,15 @@ func TestDefaultDataManager_ProcessBatchedData(t *testing.T) {
 	}
 
 	tests := []struct {
-		Name          string
-		Data          any
-		ExpectedError error
+		Name                        string
+		Data                        any
+		RecordingPreviouslyCanceled bool
+		ExpectedError               error
 	}{
-		{"Valid", expectedBatchedEvents, nil},
-		{"Nil data", nil, batchNoDataError},
-		{"Not Collection of Events", coreDtos.Event{}, batchDataNotEventCollectionError},
+		{"Valid", expectedBatchedEvents, false, nil},
+		{"Valid - Recording previously canceled", nil, true, nil},
+		{"Nil data", nil, false, batchNoDataError},
+		{"Not Collection of Events", coreDtos.Event{}, false, batchDataNotEventCollectionError},
 	}
 
 	for _, test := range tests {
@@ -293,12 +336,20 @@ func TestDefaultDataManager_ProcessBatchedData(t *testing.T) {
 			mockSdk.On("LoggingClient").Return(mockLogger)
 
 			target := NewManager(mockSdk).(*dataManager)
-			now := time.Now()
-			target.recordingStartedAt = &now
+
+			if !test.RecordingPreviouslyCanceled {
+				now := time.Now()
+				target.recordingStartedAt = &now
+			}
 
 			continueExecution, actual := target.processBatchedData(nil, test.Data)
 			if test.ExpectedError != nil {
 				require.Equal(t, test.ExpectedError, actual)
+				return
+			}
+
+			if test.RecordingPreviouslyCanceled {
+				require.False(t, continueExecution)
 				return
 			}
 

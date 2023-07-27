@@ -202,7 +202,66 @@ func TestDefaultDataManager_StartRecording(t *testing.T) {
 }
 
 func TestDefaultDataManager_RecordingStatus(t *testing.T) {
-	// TODO: Implement using TDD
+	tests := []struct {
+		Name           string
+		ExpectedStatus *dtos.RecordStatus
+	}{
+		{
+			Name: "Happy Path - nothing recoded",
+			ExpectedStatus: &dtos.RecordStatus{
+				InProgress: false,
+				EventCount: 0,
+				Duration:   0,
+			},
+		},
+		{
+			Name: "Happy Path - Recording ending",
+			ExpectedStatus: &dtos.RecordStatus{
+				InProgress: false,
+				EventCount: 10,
+				Duration:   6000000000,
+			},
+		},
+		{
+			Name: "Happy Path - Recording in progress",
+			ExpectedStatus: &dtos.RecordStatus{
+				InProgress: true,
+				EventCount: 10,
+				Duration:   6000000000,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			target := NewManager(nil).(*dataManager)
+
+			if test.ExpectedStatus.InProgress {
+				// Set up case when recording is in progress
+				startTime := time.Now().Add(test.ExpectedStatus.Duration * -1)
+				target.recordingStartedAt = &startTime
+				target.eventCount = test.ExpectedStatus.EventCount
+			} else if test.ExpectedStatus.EventCount > 0 || test.ExpectedStatus.Duration > 0 {
+				// Set up case when recording is finished and using recorded data
+				target.recordedData = &recordedData{
+					Duration: test.ExpectedStatus.Duration,
+				}
+
+				for i := 0; i < test.ExpectedStatus.EventCount; i++ {
+					target.recordedData.Events = append(target.recordedData.Events, coreDtos.Event{})
+				}
+			}
+
+			// default case (neither conditions above) is when recording is not in progress & no previous recorded data exists
+			// Nothing to set up.
+
+			actual := target.RecordingStatus()
+
+			assert.Equal(t, test.ExpectedStatus.InProgress, actual.InProgress)
+			assert.Equal(t, test.ExpectedStatus.EventCount, actual.EventCount)
+			assert.Equal(t, test.ExpectedStatus.Duration, actual.Duration.Round(test.ExpectedStatus.Duration))
+		})
+	}
 }
 
 func TestDefaultDataManager_CancelRecording(t *testing.T) {
@@ -229,6 +288,7 @@ func TestDefaultDataManager_CancelRecording(t *testing.T) {
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
 			mockSdk.On("RemoveAllFunctionPipelines")
+
 			target := NewManager(mockSdk).(*dataManager)
 
 			if test.RecordingRunning {

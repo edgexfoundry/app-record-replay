@@ -3,7 +3,7 @@ module github.com/edgexfoundry/app-record-replay
 go 1.20
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.12
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.13
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.1.0-dev.2
 	github.com/stretchr/testify v1.8.4
 )

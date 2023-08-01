@@ -16,18 +16,42 @@
 package application
 
 import (
+	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	expectedProfileName = "testProfile"
+	expectedDeviceName  = "testDevice"
+	expectedSourceName  = "testSource"
+)
+
+var expectedEventData = []coreDtos.Event{
+	coreDtos.NewEvent(expectedProfileName, expectedDeviceName, expectedSourceName),
+	coreDtos.NewEvent(expectedProfileName, expectedDeviceName, expectedSourceName),
+	coreDtos.NewEvent(expectedProfileName, expectedDeviceName, expectedSourceName),
+}
+
+func TestMain(m *testing.M) {
+	for i := range expectedEventData {
+		_ = expectedEventData[i].AddSimpleReading(expectedSourceName, common.ValueTypeString, "test1")
+	}
+
+	os.Exit(m.Run())
+}
 
 func TestNewManager(t *testing.T) {
 	target := NewManager(&mocks.ApplicationService{})
@@ -37,16 +61,17 @@ func TestNewManager(t *testing.T) {
 	assert.NotNil(t, d.dataChan)
 }
 
-func TestDefaultDataManager_StartRecording(t *testing.T) {
-	countAndTimeNoFiltersRequest := &dtos.RecordRequest{
+func TestDataManager_StartRecording(t *testing.T) {
+	countAndTimeNoFiltersRequest := dtos.RecordRequest{
 		Duration:   10 * time.Second,
 		EventLimit: 100,
 	}
 
 	tests := []struct {
 		Name                    string
-		StartRequest            *dtos.RecordRequest
+		StartRequest            dtos.RecordRequest
 		RecordingAlreadyRunning bool
+		ReplayRunning           bool
 		ExpectedStartError      error
 		SetPipelineError        error
 	}{
@@ -56,7 +81,7 @@ func TestDefaultDataManager_StartRecording(t *testing.T) {
 		},
 		{
 			Name: "Happy Path - By Count - 3 include filters",
-			StartRequest: &dtos.RecordRequest{
+			StartRequest: dtos.RecordRequest{
 				EventLimit:            100,
 				IncludeDeviceProfiles: []string{"test-profile1", "test-profile2"},
 				IncludeDevices:        []string{"test-device1", "test-device2"},
@@ -65,7 +90,7 @@ func TestDefaultDataManager_StartRecording(t *testing.T) {
 		},
 		{
 			Name: "Happy Path - By Duration - 3 exclude filters",
-			StartRequest: &dtos.RecordRequest{
+			StartRequest: dtos.RecordRequest{
 				Duration:              10 * time.Second,
 				ExcludeDeviceProfiles: []string{"test-profile3", "test-profile4"},
 				ExcludeDevices:        []string{"test-device3", "test-device4"},
@@ -79,13 +104,19 @@ func TestDefaultDataManager_StartRecording(t *testing.T) {
 			ExpectedStartError:      recordingInProgressError,
 		},
 		{
+			Name:               "Fail Path - replay is running",
+			StartRequest:       countAndTimeNoFiltersRequest,
+			ReplayRunning:      true,
+			ExpectedStartError: replayInProgressError,
+		},
+		{
 			Name:             "Fail Path - pipeline set error",
 			StartRequest:     countAndTimeNoFiltersRequest,
 			SetPipelineError: errors.New("failed"),
 		},
 		{
 			Name:               "Fail Path - No count or duration set",
-			StartRequest:       &dtos.RecordRequest{},
+			StartRequest:       dtos.RecordRequest{},
 			ExpectedStartError: batchParametersNotSetError,
 		},
 	}
@@ -147,9 +178,13 @@ func TestDefaultDataManager_StartRecording(t *testing.T) {
 				target.recordingStartedAt = &now
 			}
 
+			if test.ReplayRunning {
+				target.replayStartedAt = &now
+			}
+
 			// simulate previous recorded data is present
 			target.recordedData = &recordedData{}
-			target.eventCount = 100
+			target.recordedEventCount = 100
 
 			startErr := target.StartRecording(test.StartRequest)
 
@@ -167,7 +202,7 @@ func TestDefaultDataManager_StartRecording(t *testing.T) {
 
 			require.NoError(t, startErr)
 			assert.Nil(t, target.recordedData)
-			assert.Zero(t, target.eventCount)
+			assert.Zero(t, target.recordedEventCount)
 			assert.NotNil(t, target.recordingStartedAt)
 
 			mockSdk.AssertExpectations(t)
@@ -201,7 +236,7 @@ func TestDefaultDataManager_StartRecording(t *testing.T) {
 	}
 }
 
-func TestDefaultDataManager_RecordingStatus(t *testing.T) {
+func TestDataManager_RecordingStatus(t *testing.T) {
 	tests := []struct {
 		Name           string
 		ExpectedStatus *dtos.RecordStatus
@@ -240,7 +275,7 @@ func TestDefaultDataManager_RecordingStatus(t *testing.T) {
 				// Set up case when recording is in progress
 				startTime := time.Now().Add(test.ExpectedStatus.Duration * -1)
 				target.recordingStartedAt = &startTime
-				target.eventCount = test.ExpectedStatus.EventCount
+				target.recordedEventCount = test.ExpectedStatus.EventCount
 			} else if test.ExpectedStatus.EventCount > 0 || test.ExpectedStatus.Duration > 0 {
 				// Set up case when recording is finished and using recorded data
 				target.recordedData = &recordedData{
@@ -264,7 +299,7 @@ func TestDefaultDataManager_RecordingStatus(t *testing.T) {
 	}
 }
 
-func TestDefaultDataManager_CancelRecording(t *testing.T) {
+func TestDataManager_CancelRecording(t *testing.T) {
 	tests := []struct {
 		Name             string
 		RecordingRunning bool
@@ -310,27 +345,260 @@ func TestDefaultDataManager_CancelRecording(t *testing.T) {
 	}
 }
 
-func TestDefaultDataManager_StartReplay(t *testing.T) {
+func TestDataManager_StartReplay(t *testing.T) {
+	expectedTopic := common.BuildTopic(strings.Replace(common.CoreDataEventSubscribeTopic, "/#", "", 1),
+		expectedProfileName, expectedDeviceName, expectedSourceName)
+	goodRequest := dtos.ReplayRequest{
+		ReplayRate:  1,
+		RepeatCount: 2,
+	}
+
+	tests := []struct {
+		Name                 string
+		StartRequest         dtos.ReplayRequest
+		RecordingRunning     bool
+		ReplayAlreadyRunning bool
+		RecordedData         *recordedData
+		PublishError         error
+		ExpectedStartError   error
+	}{
+		{
+			Name:         "Happy Path - Recorded Data w/o dependent data",
+			StartRequest: goodRequest,
+			RecordedData: &recordedData{
+				Events: expectedEventData,
+			},
+		},
+		{
+			Name:         "Error Path - failed to publish",
+			StartRequest: goodRequest,
+			RecordedData: &recordedData{
+				Events: expectedEventData,
+			},
+			PublishError: errors.New("publish failed"),
+		},
+		{
+			Name: "Error Path - Bad ReplayRate -1",
+			StartRequest: dtos.ReplayRequest{
+				ReplayRate:  -1,
+				RepeatCount: 0,
+			},
+			RecordedData:       &recordedData{},
+			ExpectedStartError: invalidReplayRate,
+		},
+		{
+			Name: "Error Path - Bad ReplayRate 0",
+			StartRequest: dtos.ReplayRequest{
+				ReplayRate:  0,
+				RepeatCount: 0,
+			},
+			RecordedData:       &recordedData{},
+			ExpectedStartError: invalidReplayRate,
+		},
+		{
+			Name: "Error Path - Bad RepeatCount -1",
+			StartRequest: dtos.ReplayRequest{
+				ReplayRate:  1,
+				RepeatCount: -1,
+			},
+			RecordedData:       &recordedData{},
+			ExpectedStartError: invalidReplayCount,
+		},
+		{
+			Name:               "Error Path - Recording in progress",
+			RecordingRunning:   true,
+			ExpectedStartError: recordingInProgressError,
+		},
+		{
+			Name:                 "Error Path - Replay in progress",
+			ReplayAlreadyRunning: true,
+			ExpectedStartError:   replayInProgressError,
+		},
+		{
+			Name:               "Error Path - No recorded data",
+			ExpectedStartError: noRecordedData,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("AppContext").Return(context.Background())
+			mockSdk.On("PublishWithTopic", expectedTopic, mock.Anything, common.ContentTypeJSON).Return(test.PublishError)
+			target := NewManager(mockSdk).(*dataManager)
+
+			target.recordingStartedAt = nil
+			target.replayStartedAt = nil
+			if test.RecordedData != nil {
+				target.recordedData = test.RecordedData
+			}
+
+			now := time.Now()
+
+			if test.RecordingRunning {
+				target.recordingStartedAt = &now
+			}
+
+			if test.ReplayAlreadyRunning {
+				target.replayStartedAt = &now
+			}
+
+			if test.RecordedData != nil {
+				target.recordedData = test.RecordedData
+			}
+
+			err := target.StartReplay(test.StartRequest)
+
+			if test.ExpectedStartError != nil {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, test.ExpectedStartError.Error())
+				return
+			}
+
+			require.NoError(t, err)
+			target.recordingMutex.Lock()
+			assert.NotNil(t, target.replayStartedAt)
+			assert.Zero(t, target.replayedDuration)
+			assert.Zero(t, target.replayedEventCount)
+			target.recordingMutex.Unlock()
+
+			// Wait for the replay to complete
+			for {
+				target.recordingMutex.Lock()
+				replayStartedAt := target.replayStartedAt
+				target.recordingMutex.Unlock()
+
+				if replayStartedAt == nil {
+					break
+				}
+
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			target.recordingMutex.Lock()
+			defer target.recordingMutex.Unlock()
+
+			if test.PublishError != nil {
+				require.Error(t, target.replayError)
+				assert.ErrorContains(t, target.replayError, test.PublishError.Error())
+				return
+			}
+
+			expectedEventCount := len(test.RecordedData.Events) * test.StartRequest.RepeatCount
+			assert.Equal(t, expectedEventCount, target.replayedEventCount)
+			assert.NotZero(t, target.replayedDuration)
+		})
+	}
+}
+
+func TestDataManager_StartReplay_Cancel(t *testing.T) {
+	// These values should allow time to cancel.
+	replayRequest := dtos.ReplayRequest{
+		ReplayRate:  0.10,
+		RepeatCount: 100,
+	}
+
+	tests := []struct {
+		Name                string
+		ReplayCancel        bool
+		AppTerminated       bool
+		ExpectedReplayError error
+	}{
+		{
+			Name:                "Replay cancel",
+			ReplayCancel:        true,
+			ExpectedReplayError: errors.New("replay canceled"),
+		},
+		{
+			Name:                "App cancel",
+			AppTerminated:       true,
+			ExpectedReplayError: errors.New("app terminated"),
+		},
+	}
+
+	appCtx, appCancelFunc := context.WithCancel(context.Background())
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Info", replayExiting)
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("AppContext").Return(appCtx)
+			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+			target := NewManager(mockSdk).(*dataManager)
+
+			target.recordedData = &recordedData{
+				Events: expectedEventData,
+			}
+
+			err := target.StartReplay(replayRequest)
+			require.NoError(t, err)
+
+			require.True(t, test.AppTerminated || test.ReplayCancel)
+
+			if test.AppTerminated {
+				appCancelFunc()
+			} else if test.ReplayCancel {
+				target.replayCancelFunc()
+			}
+
+			// Wait for the replay to cancel
+			for {
+				target.recordingMutex.Lock()
+				replayStartedAt := target.replayStartedAt
+				target.recordingMutex.Unlock()
+
+				if replayStartedAt == nil {
+					break
+				}
+
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			if test.AppTerminated {
+				mockLogger.AssertCalled(t, "Info", replayExiting)
+				return
+			}
+
+			target.recordingMutex.Lock()
+			defer target.recordingMutex.Unlock()
+
+			require.Error(t, target.replayError)
+			assert.Equal(t, test.ExpectedReplayError, target.replayError)
+
+		})
+	}
+
+	// This is need to appease the linter.
+	appCancelFunc()
+}
+
+func TestDataManager_ReplayStatus(t *testing.T) {
 	// TODO: Implement using TDD
 }
 
-func TestDefaultDataManager_ReplayStatus(t *testing.T) {
+func TestDataManager_CancelReplay(t *testing.T) {
 	// TODO: Implement using TDD
 }
 
-func TestDefaultDataManager_CancelReplay(t *testing.T) {
+func TestDataManager_ExportRecordedData(t *testing.T) {
 	// TODO: Implement using TDD
 }
 
-func TestDefaultDataManager_ExportRecordedData(t *testing.T) {
+func TestDataManager_ImportRecordedData(t *testing.T) {
 	// TODO: Implement using TDD
 }
 
-func TestDefaultDataManager_ImportRecordedData(t *testing.T) {
-	// TODO: Implement using TDD
-}
-
-func TestDefaultDataManager_CountEvents(t *testing.T) {
+func TestDataManager_CountEvents(t *testing.T) {
 	tests := []struct {
 		Name          string
 		Data          any
@@ -361,12 +629,12 @@ func TestDefaultDataManager_CountEvents(t *testing.T) {
 				require.Equal(t, test.Data, actual)
 			}
 
-			assert.Equal(t, test.ExpectedCount, target.eventCount)
+			assert.Equal(t, test.ExpectedCount, target.recordedEventCount)
 		})
 	}
 }
 
-func TestDefaultDataManager_ProcessBatchedData(t *testing.T) {
+func TestDataManager_ProcessBatchedData(t *testing.T) {
 	expectedBatchedEvents := []coreDtos.Event{
 		coreDtos.NewEvent("test-profile1", "test-device1", "test-source1"),
 		coreDtos.NewEvent("test-profile2", "test-device2", "test-source2"),

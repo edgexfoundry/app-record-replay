@@ -124,11 +124,11 @@ func (_m *DataManager) ReplayStatus() (*dtos.ReplayStatus, error) {
 }
 
 // StartRecording provides a mock function with given fields: request
-func (_m *DataManager) StartRecording(request *dtos.RecordRequest) error {
+func (_m *DataManager) StartRecording(request dtos.RecordRequest) error {
 	ret := _m.Called(request)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*dtos.RecordRequest) error); ok {
+	if rf, ok := ret.Get(0).(func(dtos.RecordRequest) error); ok {
 		r0 = rf(request)
 	} else {
 		r0 = ret.Error(0)
@@ -138,11 +138,11 @@ func (_m *DataManager) StartRecording(request *dtos.RecordRequest) error {
 }
 
 // StartReplay provides a mock function with given fields: request
-func (_m *DataManager) StartReplay(request *dtos.ReplayRequest) error {
+func (_m *DataManager) StartReplay(request dtos.ReplayRequest) error {
 	ret := _m.Called(request)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*dtos.ReplayRequest) error); ok {
+	if rf, ok := ret.Get(0).(func(dtos.ReplayRequest) error); ok {
 		r0 = rf(request)
 	} else {
 		r0 = ret.Error(0)

@@ -555,7 +555,7 @@ func TestDataManager_StartReplay_Cancel(t *testing.T) {
 			mockSdk.On("AppContext").Return(appCtx)
 			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
-			target := NewManager(mockSdk, 0).(*dataManager)
+			target := NewManager(mockSdk, time.Minute).(*dataManager)
 
 			target.recordedData = &recordedData{
 				Events: expectedEventData,
@@ -604,7 +604,142 @@ func TestDataManager_StartReplay_Cancel(t *testing.T) {
 }
 
 func TestDataManager_ReplayStatus(t *testing.T) {
-	// TODO: Implement using TDD
+	// These values should allow time get status .
+	longReplayRequest := dtos.ReplayRequest{
+		ReplayRate:  1,
+		RepeatCount: 100000,
+	}
+
+	// These values should replay fast so status is after completed .
+	shortReplayRequest := dtos.ReplayRequest{
+		ReplayRate:  10,
+		RepeatCount: 2,
+	}
+
+	tests := []struct {
+		Name                string
+		Request             dtos.ReplayRequest
+		StatusWhileRunning  bool
+		NoReplayRan         bool
+		ExpectedStatus      dtos.ReplayStatus
+		ExpectedReplayError error
+	}{
+		{
+			Name:               "Replay Status while replaying",
+			Request:            longReplayRequest,
+			StatusWhileRunning: true,
+			ExpectedStatus: dtos.ReplayStatus{
+				Running: true,
+			},
+		},
+		{
+			Name:    "Replay Status after replayed",
+			Request: shortReplayRequest,
+			ExpectedStatus: dtos.ReplayStatus{
+				Running:     false,
+				EventCount:  6,
+				RepeatCount: 2,
+			},
+		},
+		{
+			Name:        "Replay Status nothing replayed",
+			NoReplayRan: true,
+			Request:     shortReplayRequest,
+			ExpectedStatus: dtos.ReplayStatus{
+				ErrorMessage: noReplayExists,
+			},
+		},
+		{
+			Name:                "Replay error publishing",
+			Request:             shortReplayRequest,
+			ExpectedReplayError: errors.New("publish failed"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("AppContext").Return(context.Background())
+			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(test.ExpectedReplayError)
+
+			target := NewManager(mockSdk, time.Minute).(*dataManager)
+
+			target.recordedData = &recordedData{
+				Events: expectedEventData,
+			}
+
+			target.replayStartedAt = nil
+			target.replayError = nil
+			target.replayedEventCount = 0
+			target.replayedRepeatCount = 0
+			target.replayedDuration = 0
+
+			if !test.NoReplayRan {
+				err := target.StartReplay(test.Request)
+				require.NoError(t, err)
+			}
+
+			if test.StatusWhileRunning {
+
+				time.Sleep(time.Second)
+
+				actualStatus := target.ReplayStatus()
+
+				target.recordingMutex.Lock()
+				defer target.recordingMutex.Unlock()
+
+				// Verify replay is still running
+				require.NotNil(t, target.replayStartedAt)
+
+				assert.Equal(t, test.ExpectedStatus.Running, actualStatus.Running)
+				assert.NotZero(t, actualStatus.EventCount)
+				assert.NotZero(t, actualStatus.Duration)
+				assert.Empty(t, actualStatus.ErrorMessage)
+				return
+			}
+
+			// Wait for the replay to complete
+			for {
+				target.recordingMutex.Lock()
+				replayStartedAt := target.replayStartedAt
+				target.recordingMutex.Unlock()
+
+				if replayStartedAt == nil {
+					break
+				}
+
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			actualStatus := target.ReplayStatus()
+
+			if test.NoReplayRan {
+				// In this case we can compare the whole status struct
+				assert.Equal(t, test.ExpectedStatus, actualStatus)
+				return
+			}
+
+			if test.ExpectedReplayError != nil {
+				assert.Equal(t, test.ExpectedStatus.Running, actualStatus.Running)
+				require.NotEmpty(t, actualStatus.ErrorMessage)
+				assert.Contains(t, actualStatus.ErrorMessage, test.ExpectedReplayError.Error())
+				return
+			}
+
+			// Since Duration will vary, we can't compare the whole status struct,
+			// so have to verify  the individual fields
+			assert.Equal(t, test.ExpectedStatus.Running, actualStatus.Running)
+			assert.Equal(t, test.ExpectedStatus.EventCount, actualStatus.EventCount)
+			assert.Equal(t, test.ExpectedStatus.RepeatCount, actualStatus.RepeatCount)
+			assert.NotZero(t, actualStatus.Duration)
+			assert.Empty(t, actualStatus.ErrorMessage)
+		})
+	}
 }
 
 func TestDataManager_CancelReplay(t *testing.T) {

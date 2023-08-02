@@ -47,17 +47,6 @@ const (
 	noReplayExists                     = "no replay running or has previously been run"
 )
 
-var recordingInProgressError = errors.New("a recording is in progress")
-var batchParametersNotSetError = errors.New("duration and/or count not set")
-var noRecordingRunningToCancelError = errors.New("no recording currently running")
-
-var replayInProgressError = errors.New("a replay is in progress")
-var noRecordedData = errors.New("no recorded data present")
-var invalidReplayRate = errors.New("invalid ReplayRate, value must be greater than 0")
-var invalidReplayCount = errors.New("invalid ReplayCount, value must be greater than or equal 0. Zero defaults to 1")
-
-var replayCanceled = errors.New("replay canceled")
-
 type recordedData struct {
 	Duration time.Duration
 	Events   []coreDtos.Event
@@ -91,6 +80,10 @@ func NewManager(service appInterfaces.ApplicationService, maxReplayDelay time.Du
 		maxReplayDelay: maxReplayDelay,
 	}
 }
+
+var recordingInProgressError = errors.New("a recording is in progress")
+var batchParametersNotSetError = errors.New("duration and/or count not set")
+var noRecordingRunningToCancelError = errors.New("no recording currently running")
 
 // StartRecording starts a recording session based on the values in the request.
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
@@ -223,6 +216,11 @@ func (m *dataManager) RecordingStatus() dtos.RecordStatus {
 	return status
 }
 
+var replayInProgressError = errors.New("a replay is in progress")
+var noRecordedData = errors.New("no recorded data present")
+var invalidReplayRate = errors.New("invalid ReplayRate, value must be greater than 0")
+var invalidReplayCount = errors.New("invalid ReplayCount, value must be greater than or equal 0. Zero defaults to 1")
+
 // StartReplay starts a replay session based on the values in the request
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
 func (m *dataManager) StartReplay(request dtos.ReplayRequest) error {
@@ -288,13 +286,13 @@ func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
 
 			// Check if replay cancel func has been called to cancel the replay
 			if m.replayContext.Err() != nil {
-				m.setReplayError(replayCanceled)
+				m.setReplayError(replayCanceled, false)
 				return
 			}
 
 			replayEvent := coreDtos.Event{}
 			if err := utils.DeepCopy(event, &replayEvent); err != nil {
-				m.setReplayError(fmt.Errorf(replayDeepCopyFailed, err))
+				m.setReplayError(fmt.Errorf(replayDeepCopyFailed, err), true)
 				return
 			}
 
@@ -309,7 +307,7 @@ func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
 				delay = int64(float32(delay) * (1 / request.ReplayRate))
 
 				if time.Duration(delay) > m.maxReplayDelay {
-					m.setReplayError(fmt.Errorf(maxReplayDelayExceeded, time.Duration(delay).String(), m.maxReplayDelay.String()))
+					m.setReplayError(fmt.Errorf(maxReplayDelayExceeded, time.Duration(delay).String(), m.maxReplayDelay.String()), true)
 					return
 				}
 
@@ -333,7 +331,7 @@ func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
 			addEvent := requests.NewAddEventRequest(replayEvent)
 
 			if err := m.appSvc.PublishWithTopic(topic, addEvent, common.ContentTypeJSON); err != nil {
-				m.setReplayError(fmt.Errorf(replayPublishFailed, err))
+				m.setReplayError(fmt.Errorf(replayPublishFailed, err), true)
 				return
 			}
 
@@ -354,12 +352,14 @@ func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
 		m.replayedDuration.String(), m.replayedEventCount, m.replayedRepeatCount)
 }
 
-func (m *dataManager) setReplayError(err error) {
+func (m *dataManager) setReplayError(err error, logError bool) {
 	m.recordingMutex.Lock()
 	defer m.recordingMutex.Unlock()
 	m.replayError = err
 	m.replayStartedAt = nil
-	m.appSvc.LoggingClient().Errorf("ARR Replay: Replay stopped due to error: %v", err)
+	if logError {
+		m.appSvc.LoggingClient().Errorf("ARR Replay: Replay stopped due to error: %v", err)
+	}
 }
 
 func (m *dataManager) incrementReplayedEventCount() {
@@ -374,10 +374,27 @@ func (m *dataManager) incrementReplayRepeatCount() {
 	m.replayedRepeatCount++
 }
 
+var noReplayRunningToCancelError = errors.New("no replay currently running")
+var replayCanceled = errors.New("replay canceled")
+
 // CancelReplay cancels the current replay session
 func (m *dataManager) CancelReplay() error {
-	//TODO implement me using TDD
-	return errors.New("not implemented")
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	if m.replayStartedAt == nil {
+		return noReplayRunningToCancelError
+	}
+
+	if m.replayCancelFunc != nil {
+		m.replayCancelFunc()
+		m.replayStartedAt = nil
+		m.replayError = replayCanceled
+	}
+
+	m.appSvc.LoggingClient().Debug("ARR Cancel Replay: Replay of Events has been canceled")
+
+	return nil
 }
 
 // ReplayStatus returns the status of the current replay session

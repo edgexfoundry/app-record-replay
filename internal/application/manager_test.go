@@ -743,7 +743,100 @@ func TestDataManager_ReplayStatus(t *testing.T) {
 }
 
 func TestDataManager_CancelReplay(t *testing.T) {
-	// TODO: Implement using TDD
+	// These values should allow time to cancel.
+	replayRequest := dtos.ReplayRequest{
+		ReplayRate:  0.10,
+		RepeatCount: 100,
+	}
+
+	tests := []struct {
+		Name                string
+		ReplayRunning       bool
+		ExpectedReplayError error
+		ExpectedCancelError error
+	}{
+		{
+			Name:                "Replay running",
+			ReplayRunning:       true,
+			ExpectedReplayError: errors.New("replay canceled"),
+		},
+		{
+			Name:                "Replay not running",
+			ReplayRunning:       false,
+			ExpectedCancelError: noReplayRunningToCancelError,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debug", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			//mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("AppContext").Return(context.Background())
+			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+			target := NewManager(mockSdk, time.Minute).(*dataManager)
+
+			target.recordedData = &recordedData{
+				Events: expectedEventData,
+			}
+
+			target.replayStartedAt = nil
+			target.replayError = nil
+			target.replayedEventCount = 0
+			target.replayedRepeatCount = 0
+			target.replayedDuration = 0
+
+			if test.ReplayRunning {
+				err := target.StartReplay(replayRequest)
+				require.NoError(t, err)
+
+				// Wait for the replay to start
+				for {
+					target.recordingMutex.Lock()
+					replayStartedAt := target.replayStartedAt
+					target.recordingMutex.Unlock()
+
+					if replayStartedAt != nil {
+						break
+					}
+
+					time.Sleep(500 * time.Millisecond)
+				}
+			}
+
+			err := target.CancelReplay()
+
+			if test.ExpectedCancelError != nil {
+				require.Error(t, err)
+				assert.Equal(t, test.ExpectedCancelError, err)
+				return
+			}
+
+			// Wait for the replay to cancel
+			for {
+				target.recordingMutex.Lock()
+				replayStartedAt := target.replayStartedAt
+				target.recordingMutex.Unlock()
+
+				if replayStartedAt == nil {
+					break
+				}
+
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			target.recordingMutex.Lock()
+			defer target.recordingMutex.Unlock()
+
+			require.Error(t, target.replayError)
+			assert.Equal(t, test.ExpectedReplayError, target.replayError)
+		})
+	}
 }
 
 func TestDataManager_ExportRecordedData(t *testing.T) {

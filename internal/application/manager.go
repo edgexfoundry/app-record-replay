@@ -17,8 +17,10 @@
 package application
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +28,11 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/transforms"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
+	"github.com/edgexfoundry/go-mod-bootstrap/v3/bootstrap/utils"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos/requests"
+	"github.com/google/uuid"
 )
 
 const (
@@ -34,38 +40,60 @@ const (
 	setPipelineFailedMessage           = "failed to set the default function pipeline"
 	debugFilterMessage                 = "ARR Start Recording: Filter %s names %v function added to the functions pipeline"
 	debugPipelineFunctionsAddedMessage = "ARR Start Recording: CountEvents, Batch and ProcessBatchedData functions added to the functions pipeline"
+	replayExiting                      = "ARR Replay: Replay exiting due to App termination"
+	replayPublishFailed                = "failed to publish replay event: %v"
+	replayDeepCopyFailed               = "deep copy of event to be replayed failed: %v"
+	maxReplayDelayExceeded             = "%s delay exceeds the maximum replay delay of %s. Maximum replay delay is configurable using MaxReplayDelay App Setting"
 )
 
-var recordingInProgressError = errors.New("a recording is already in progress")
+var recordingInProgressError = errors.New("a recording is in progress")
 var batchParametersNotSetError = errors.New("duration and/or count not set")
 var noRecordingRunningToCancelError = errors.New("no recording currently running")
 
+var replayInProgressError = errors.New("a replay is in progress")
+var noRecordedData = errors.New("no recorded data present")
+var invalidReplayRate = errors.New("invalid ReplayRate, value must be greater than 0")
+var invalidReplayCount = errors.New("invalid ReplayCount, value must be greater than or equal 0. Zero defaults to 1")
+
+var replayCanceled = errors.New("replay canceled")
+
 type recordedData struct {
-	Events   []coreDtos.Event
 	Duration time.Duration
+	Events   []coreDtos.Event
+	Devices  []coreDtos.Device
+	Profiles []coreDtos.DeviceProfile
 }
 
 // dataManager implements interface that records and replays captured data
 type dataManager struct {
-	dataChan           chan []coreDtos.Event
-	appSvc             appInterfaces.ApplicationService
-	eventCount         int
+	appSvc         appInterfaces.ApplicationService
+	recordingMutex sync.Mutex
+
+	recordedEventCount int
 	recordingStartedAt *time.Time
 	recordedData       *recordedData
-	recordingMutex     sync.Mutex
+
+	maxReplayDelay      time.Duration
+	replayStartedAt     *time.Time
+	replayedDuration    time.Duration
+	replayedEventCount  int
+	replayedRepeatCount int
+	replayError         error
+	replayContext       context.Context
+	replayCancelFunc    context.CancelFunc
 }
 
 // NewManager is the factory function which instantiates a Data Manager
-func NewManager(service appInterfaces.ApplicationService) interfaces.DataManager {
+func NewManager(service appInterfaces.ApplicationService, maxReplayDelay time.Duration) interfaces.DataManager {
 	return &dataManager{
-		dataChan: make(chan []coreDtos.Event, 1),
-		appSvc:   service,
+		appSvc:         service,
+		maxReplayDelay: maxReplayDelay,
 	}
 }
 
 // StartRecording starts a recording session based on the values in the request.
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
-func (m *dataManager) StartRecording(request *dtos.RecordRequest) error {
+func (m *dataManager) StartRecording(request dtos.RecordRequest) error {
 	lc := m.appSvc.LoggingClient()
 
 	m.recordingMutex.Lock()
@@ -74,8 +102,13 @@ func (m *dataManager) StartRecording(request *dtos.RecordRequest) error {
 	if m.recordingStartedAt != nil {
 		return recordingInProgressError
 	}
+
+	if m.replayStartedAt != nil {
+		return replayInProgressError
+	}
+
 	m.recordedData = nil
-	m.eventCount = 0
+	m.recordedEventCount = 0
 
 	var pipeline []appInterfaces.AppFunction
 
@@ -180,7 +213,7 @@ func (m *dataManager) RecordingStatus() *dtos.RecordStatus {
 	if m.recordingStartedAt != nil {
 		status.InProgress = true
 		status.Duration = time.Since(*m.recordingStartedAt)
-		status.EventCount = m.eventCount
+		status.EventCount = m.recordedEventCount
 	} else if m.recordedData != nil {
 		status.Duration = m.recordedData.Duration
 		status.EventCount = len(m.recordedData.Events)
@@ -191,9 +224,153 @@ func (m *dataManager) RecordingStatus() *dtos.RecordStatus {
 
 // StartReplay starts a replay session based on the values in the request
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
-func (m *dataManager) StartReplay(request *dtos.ReplayRequest) error {
-	//TODO implement me using TDD
-	return errors.New("not implemented")
+func (m *dataManager) StartReplay(request dtos.ReplayRequest) error {
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	if m.recordingStartedAt != nil {
+		return recordingInProgressError
+	}
+
+	if m.replayStartedAt != nil {
+		return replayInProgressError
+	}
+
+	if m.recordedData == nil {
+		return noRecordedData
+	}
+
+	if request.ReplayRate <= 0 {
+		return invalidReplayRate
+	}
+
+	if request.RepeatCount < 0 {
+		return invalidReplayCount
+	}
+
+	now := time.Now()
+	m.replayStartedAt = &now
+	m.replayedDuration = 0
+	m.replayedEventCount = 0
+	m.replayedRepeatCount = 0
+	m.replayError = nil
+	m.replayContext, m.replayCancelFunc = context.WithCancel(context.Background())
+
+	go m.replayRecordedEvents(request)
+
+	return nil
+}
+
+func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
+	var previousEventTime int64
+	firstEvent := true
+	lc := m.appSvc.LoggingClient()
+
+	// Replay Count of zero defaults to 1.
+	replayCount := 1
+	if request.RepeatCount > 0 {
+		replayCount = request.RepeatCount
+	}
+
+	lc.Debugf("ARR Replay: Replay starting with Replay Rate of %v and Repeat Count of %d ", request.ReplayRate, replayCount)
+
+	for i := 0; i < replayCount; i++ {
+		for _, event := range m.recordedData.Events {
+			// Check if service is terminating
+			if m.appSvc.AppContext().Err() != nil {
+				m.recordingMutex.Lock()
+				m.replayStartedAt = nil
+				m.recordingMutex.Unlock()
+				m.appSvc.LoggingClient().Info(replayExiting)
+				return
+			}
+
+			// Check if replay cancel func has been called to cancel the replay
+			if m.replayContext.Err() != nil {
+				m.setReplayError(replayCanceled)
+				return
+			}
+
+			replayEvent := coreDtos.Event{}
+			if err := utils.DeepCopy(event, &replayEvent); err != nil {
+				m.setReplayError(fmt.Errorf(replayDeepCopyFailed, err))
+				return
+			}
+
+			// Send the first event immediately and then wait appropriate time between events
+			if firstEvent {
+				firstEvent = false
+			} else {
+				delay := replayEvent.Origin - previousEventTime
+
+				// Replay Rate less than one increases the delay to slow down replay pace while greater than one
+				// decreases the delay to increase the replay pace.
+				delay = int64(float32(delay) * (1 / request.ReplayRate))
+
+				if time.Duration(delay) > m.maxReplayDelay {
+					m.setReplayError(fmt.Errorf(maxReplayDelayExceeded, time.Duration(delay).String(), m.maxReplayDelay.String()))
+					return
+				}
+
+				// Best we can do with realtime capabilities
+				time.Sleep(time.Duration(delay))
+			}
+
+			previousEventTime = replayEvent.Origin
+
+			topic := common.BuildTopic(strings.Replace(common.CoreDataEventSubscribeTopic, "/#", "", 1),
+				replayEvent.ProfileName, replayEvent.DeviceName, replayEvent.SourceName)
+
+			newOrigin := time.Now().UnixNano()
+			replayEvent.Origin = newOrigin
+			replayEvent.Id = uuid.NewString()
+			for index := range replayEvent.Readings {
+				replayEvent.Readings[index].Origin = newOrigin
+				replayEvent.Readings[index].Id = uuid.NewString()
+			}
+
+			addEvent := requests.NewAddEventRequest(replayEvent)
+
+			if err := m.appSvc.PublishWithTopic(topic, addEvent, common.ContentTypeJSON); err != nil {
+				m.setReplayError(fmt.Errorf(replayPublishFailed, err))
+				return
+			}
+
+			lc.Debugf("ARR Replay: Replayed Event to topic: %s", topic)
+
+			m.incrementReplayedEventCount()
+		}
+
+		m.incrementReplayRepeatCount()
+	}
+
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+	m.replayedDuration = time.Since(*m.replayStartedAt)
+	m.replayStartedAt = nil
+
+	lc.Debugf("ARR Replay: Replay completed in %s. %d events replayed with %d repeated replays",
+		m.replayedDuration.String(), m.replayedEventCount, m.replayedRepeatCount)
+}
+
+func (m *dataManager) setReplayError(err error) {
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+	m.replayError = err
+	m.replayStartedAt = nil
+	m.appSvc.LoggingClient().Errorf("ARR Replay: Replay stopped due to error: %v", err)
+}
+
+func (m *dataManager) incrementReplayedEventCount() {
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+	m.replayedEventCount++
+}
+
+func (m *dataManager) incrementReplayRepeatCount() {
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+	m.replayedRepeatCount++
 }
 
 // CancelReplay cancels the current replay session
@@ -241,9 +418,9 @@ func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) 
 	m.recordingMutex.Lock()
 	defer m.recordingMutex.Unlock()
 
-	m.eventCount++
+	m.recordedEventCount++
 
-	m.appSvc.LoggingClient().Debugf("ARR Event Count: received event to be recorded. Current event count is %d", m.eventCount)
+	m.appSvc.LoggingClient().Debugf("ARR Event Count: received event to be recorded. Current event count is %d", m.recordedEventCount)
 
 	return true, data
 }

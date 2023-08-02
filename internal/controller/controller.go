@@ -129,7 +129,7 @@ func (c *httpController) startRecording(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	if err := c.dataManager.StartRecording(startRequest); err != nil {
+	if err := c.dataManager.StartRecording(*startRequest); err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRecording, err)))
 		return
@@ -187,7 +187,7 @@ func (c *httpController) startReplay(writer http.ResponseWriter, request *http.R
 		return
 	}
 
-	if err := c.dataManager.StartReplay(startRequest); err != nil {
+	if err := c.dataManager.StartReplay(*startRequest); err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedReplay, err)))
 		return

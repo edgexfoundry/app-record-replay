@@ -42,8 +42,8 @@ const (
 	debugPipelineFunctionsAddedMessage = "ARR Start Recording: CountEvents, Batch and ProcessBatchedData functions added to the functions pipeline"
 	replayExiting                      = "ARR Replay: Replay exiting due to App termination"
 	replayPublishFailed                = "failed to publish replay event: %v"
-	replayEventMarshalFailed           = "failed to marshal replay event to JSON: %v"
 	replayDeepCopyFailed               = "deep copy of event to be replayed failed: %v"
+	maxReplayDelayExceeded             = "%s delay exceeds the maximum replay delay of %s. Maximum replay delay is configurable using MaxReplayDelay App Setting"
 )
 
 var recordingInProgressError = errors.New("a recording is in progress")
@@ -66,7 +66,6 @@ type recordedData struct {
 
 // dataManager implements interface that records and replays captured data
 type dataManager struct {
-	dataChan       chan []coreDtos.Event
 	appSvc         appInterfaces.ApplicationService
 	recordingMutex sync.Mutex
 
@@ -74,6 +73,7 @@ type dataManager struct {
 	recordingStartedAt *time.Time
 	recordedData       *recordedData
 
+	maxReplayDelay      time.Duration
 	replayStartedAt     *time.Time
 	replayedDuration    time.Duration
 	replayedEventCount  int
@@ -84,10 +84,10 @@ type dataManager struct {
 }
 
 // NewManager is the factory function which instantiates a Data Manager
-func NewManager(service appInterfaces.ApplicationService) interfaces.DataManager {
+func NewManager(service appInterfaces.ApplicationService, maxReplayDelay time.Duration) interfaces.DataManager {
 	return &dataManager{
-		dataChan: make(chan []coreDtos.Event, 1),
-		appSvc:   service,
+		appSvc:         service,
+		maxReplayDelay: maxReplayDelay,
 	}
 }
 
@@ -306,6 +306,11 @@ func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
 				// Replay Rate less than one increases the delay to slow down replay pace while greater than one
 				// decreases the delay to increase the replay pace.
 				delay = int64(float32(delay) * (1 / request.ReplayRate))
+
+				if time.Duration(delay) > m.maxReplayDelay {
+					m.setReplayError(fmt.Errorf(maxReplayDelayExceeded, time.Duration(delay).String(), m.maxReplayDelay.String()))
+					return
+				}
 
 				// Best we can do with realtime capabilities
 				time.Sleep(time.Duration(delay))

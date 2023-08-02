@@ -17,10 +17,17 @@
 package app
 
 import (
+	"time"
+
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/application"
 	"github.com/edgexfoundry/app-record-replay/internal/controller"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
+)
+
+const (
+	MaxReplayDelayAppSetting = "MaxReplayDelay"
+	defaultMaxReplayDelay    = time.Minute
 )
 
 type recordReplayApp struct {
@@ -48,13 +55,26 @@ func (app *recordReplayApp) CreateAndRunAppService(serviceKey string, newService
 		return -1
 	}
 
-	if err := controller.New(application.NewManager(app.service), app.service).AddRoutes(); err != nil {
-		app.lc.Errorf("Adding routes failed: %s", err.Error())
+	maxReplayDelay := defaultMaxReplayDelay
+	maxReplayDelayValue := app.service.ApplicationSettings()[MaxReplayDelayAppSetting]
+	if len(maxReplayDelayValue) > 0 {
+		var err error
+		maxReplayDelay, err = time.ParseDuration(maxReplayDelayValue)
+		if err != nil {
+			app.lc.Errorf("Invalid %s value: %v", MaxReplayDelayAppSetting, err)
+			return -1
+		}
+	} else {
+		app.lc.Warnf("%s not set in ApplicationSetting configuration. Using default of %s", MaxReplayDelayAppSetting, defaultMaxReplayDelay.String())
+	}
+
+	if err := controller.New(application.NewManager(app.service, maxReplayDelay), app.service).AddRoutes(); err != nil {
+		app.lc.Errorf("Adding routes failed: %v", err)
 		return -1
 	}
 
 	if err := app.service.Run(); err != nil {
-		app.lc.Errorf("Running app service failed: %s", err.Error())
+		app.lc.Errorf("Running app service failed: %v", err)
 		return -1
 	}
 

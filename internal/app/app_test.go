@@ -22,6 +22,7 @@ import (
 
 	clientMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/interfaces/mocks"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
+	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -39,6 +40,7 @@ func TestCreateAndRunService_Success(t *testing.T) {
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
+		mockAppService.Mock.On("ApplicationSettings").Return(map[string]string{MaxReplayDelayAppSetting: "1s"})
 		mockAppService.On("DeviceClient").Return(&clientMocks.DeviceClient{})
 		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		mockAppService.On("Run").Return(nil)
@@ -59,6 +61,26 @@ func TestCreateAndRunService_NewService_Failed(t *testing.T) {
 	expected := -1
 	actual := app.CreateAndRunAppService("TestKey", mockFactory)
 	assert.Equal(t, expected, actual)
+}
+
+func TestCreateAndRunService_MaxReplayDelayAppSetting_Failed(t *testing.T) {
+	app := New()
+
+	mockLogger := &loggerMocks.LoggingClient{}
+	mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything)
+
+	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
+		mockAppService := &mocks.ApplicationService{}
+		mockAppService.On("LoggingClient").Return(mockLogger)
+		mockAppService.Mock.On("ApplicationSettings").Return(map[string]string{MaxReplayDelayAppSetting: "junk"})
+		mockAppService.On("DeviceClient").Return(&clientMocks.DeviceClient{})
+		return mockAppService, true
+	}
+
+	expected := -1
+	actual := app.CreateAndRunAppService("TestKey", mockFactory)
+	assert.Equal(t, expected, actual)
+	mockLogger.AssertExpectations(t)
 }
 
 func TestCreateAndRunService_DeviceClient_Failed(t *testing.T) {
@@ -92,6 +114,7 @@ func TestCreateAndRunService_Run_Failed(t *testing.T) {
 	mockFactory := func(_ string) (interfaces.ApplicationService, bool) {
 		mockAppService := &mocks.ApplicationService{}
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
+		mockAppService.Mock.On("ApplicationSettings").Return(map[string]string{MaxReplayDelayAppSetting: "1s"})
 		mockAppService.On("DeviceClient").Return(&clientMocks.DeviceClient{})
 		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		mockAppService.On("Run").Return(fmt.Errorf("failed")).Run(func(args mock.Arguments) {

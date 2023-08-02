@@ -28,3 +28,6 @@ MessageBus:
     ClientId: "app-record-replay"
 
 # Using default Trigger config from common config
+
+ApplicationSettings:
+  MaxReplayDelay: "45s"

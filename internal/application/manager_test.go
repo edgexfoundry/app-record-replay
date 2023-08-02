@@ -47,6 +47,8 @@ var expectedEventData = []coreDtos.Event{
 
 func TestMain(m *testing.M) {
 	for i := range expectedEventData {
+		addValue := time.Duration(int64(i) * int64(time.Second))
+		expectedEventData[i].Origin = time.Now().Add(addValue).UnixNano()
 		_ = expectedEventData[i].AddSimpleReading(expectedSourceName, common.ValueTypeString, "test1")
 	}
 
@@ -54,11 +56,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewManager(t *testing.T) {
-	target := NewManager(&mocks.ApplicationService{})
+	target := NewManager(&mocks.ApplicationService{}, 0)
 	require.NotNil(t, target)
 	d := target.(*dataManager)
 	require.NotNil(t, d)
-	assert.NotNil(t, d.dataChan)
 }
 
 func TestDataManager_StartRecording(t *testing.T) {
@@ -128,7 +129,7 @@ func TestDataManager_StartRecording(t *testing.T) {
 			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything)
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
-			target := NewManager(mockSdk).(*dataManager)
+			target := NewManager(mockSdk, 0).(*dataManager)
 
 			// Due to limitation of mocks with respect to function pointers, the best we can do is pass the expected number
 			// of mock.Anything parameters to match the number of expected pipeline functions pointers in the actual call.
@@ -269,7 +270,7 @@ func TestDataManager_RecordingStatus(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			target := NewManager(nil).(*dataManager)
+			target := NewManager(nil, 0).(*dataManager)
 
 			if test.ExpectedStatus.InProgress {
 				// Set up case when recording is in progress
@@ -324,7 +325,7 @@ func TestDataManager_CancelRecording(t *testing.T) {
 			mockSdk.On("LoggingClient").Return(mockLogger)
 			mockSdk.On("RemoveAllFunctionPipelines")
 
-			target := NewManager(mockSdk).(*dataManager)
+			target := NewManager(mockSdk, 0).(*dataManager)
 
 			if test.RecordingRunning {
 				now := time.Now()
@@ -358,13 +359,16 @@ func TestDataManager_StartReplay(t *testing.T) {
 		StartRequest         dtos.ReplayRequest
 		RecordingRunning     bool
 		ReplayAlreadyRunning bool
+		MaxReplayDelayLimit  time.Duration
 		RecordedData         *recordedData
-		PublishError         error
+		ExpectedPublishError error
+		ExpectedReplayError  error
 		ExpectedStartError   error
 	}{
 		{
-			Name:         "Happy Path - Recorded Data w/o dependent data",
-			StartRequest: goodRequest,
+			Name:                "Happy Path",
+			StartRequest:        goodRequest,
+			MaxReplayDelayLimit: time.Minute,
 			RecordedData: &recordedData{
 				Events: expectedEventData,
 			},
@@ -375,7 +379,18 @@ func TestDataManager_StartReplay(t *testing.T) {
 			RecordedData: &recordedData{
 				Events: expectedEventData,
 			},
-			PublishError: errors.New("publish failed"),
+			ExpectedPublishError: errors.New("publish failed"),
+		},
+		{
+			Name: "Error Path - calculated delay too large",
+			StartRequest: dtos.ReplayRequest{
+				ReplayRate: 0.00001,
+			},
+			MaxReplayDelayLimit: 1 * time.Second,
+			RecordedData: &recordedData{
+				Events: expectedEventData,
+			},
+			ExpectedReplayError: errors.New("delay exceeds the maximum replay delay"),
 		},
 		{
 			Name: "Error Path - Bad ReplayRate -1",
@@ -429,8 +444,8 @@ func TestDataManager_StartReplay(t *testing.T) {
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
 			mockSdk.On("AppContext").Return(context.Background())
-			mockSdk.On("PublishWithTopic", expectedTopic, mock.Anything, common.ContentTypeJSON).Return(test.PublishError)
-			target := NewManager(mockSdk).(*dataManager)
+			mockSdk.On("PublishWithTopic", expectedTopic, mock.Anything, common.ContentTypeJSON).Return(test.ExpectedPublishError)
+			target := NewManager(mockSdk, test.MaxReplayDelayLimit).(*dataManager)
 
 			target.recordingStartedAt = nil
 			target.replayStartedAt = nil
@@ -483,9 +498,15 @@ func TestDataManager_StartReplay(t *testing.T) {
 			target.recordingMutex.Lock()
 			defer target.recordingMutex.Unlock()
 
-			if test.PublishError != nil {
+			if test.ExpectedPublishError != nil {
 				require.Error(t, target.replayError)
-				assert.ErrorContains(t, target.replayError, test.PublishError.Error())
+				assert.ErrorContains(t, target.replayError, test.ExpectedPublishError.Error())
+				return
+			}
+
+			if test.ExpectedReplayError != nil {
+				require.Error(t, target.replayError)
+				assert.ErrorContains(t, target.replayError, test.ExpectedReplayError.Error())
 				return
 			}
 
@@ -534,7 +555,7 @@ func TestDataManager_StartReplay_Cancel(t *testing.T) {
 			mockSdk.On("AppContext").Return(appCtx)
 			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
-			target := NewManager(mockSdk).(*dataManager)
+			target := NewManager(mockSdk, 0).(*dataManager)
 
 			target.recordedData = &recordedData{
 				Events: expectedEventData,
@@ -617,7 +638,7 @@ func TestDataManager_CountEvents(t *testing.T) {
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
 
-			target := NewManager(mockSdk).(*dataManager)
+			target := NewManager(mockSdk, 0).(*dataManager)
 			for i := 0; i < test.ExpectedCount; i++ {
 				continueExecution, actual := target.countEvents(nil, test.Data)
 				if test.ExpectedError != nil {
@@ -663,7 +684,7 @@ func TestDataManager_ProcessBatchedData(t *testing.T) {
 			mockSdk.On("RemoveAllFunctionPipelines")
 			mockSdk.On("LoggingClient").Return(mockLogger)
 
-			target := NewManager(mockSdk).(*dataManager)
+			target := NewManager(mockSdk, 0).(*dataManager)
 
 			if !test.RecordingPreviouslyCanceled {
 				now := time.Now()

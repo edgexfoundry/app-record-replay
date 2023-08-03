@@ -44,6 +44,7 @@ const (
 	replayPublishFailed                = "failed to publish replay event: %v"
 	replayDeepCopyFailed               = "deep copy of event to be replayed failed: %v"
 	maxReplayDelayExceeded             = "%s delay exceeds the maximum replay delay of %s. Maximum replay delay is configurable using MaxReplayDelay App Setting"
+	noReplayExists                     = "no replay running or has previously been run"
 )
 
 var recordingInProgressError = errors.New("a recording is in progress")
@@ -204,11 +205,11 @@ func (m *dataManager) CancelRecording() error {
 }
 
 // RecordingStatus returns the status of the current recording session
-func (m *dataManager) RecordingStatus() *dtos.RecordStatus {
+func (m *dataManager) RecordingStatus() dtos.RecordStatus {
 	m.recordingMutex.Lock()
 	defer m.recordingMutex.Unlock()
 
-	status := &dtos.RecordStatus{}
+	status := dtos.RecordStatus{}
 
 	if m.recordingStartedAt != nil {
 		status.InProgress = true
@@ -380,9 +381,31 @@ func (m *dataManager) CancelReplay() error {
 }
 
 // ReplayStatus returns the status of the current replay session
-func (m *dataManager) ReplayStatus() (*dtos.ReplayStatus, error) {
-	//TODO implement me using TDD
-	return nil, errors.New("not implemented")
+func (m *dataManager) ReplayStatus() dtos.ReplayStatus {
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	duration := m.replayedDuration
+
+	// If replay is in progress we need to calculate the duration so far.
+	if m.replayedDuration == 0 && m.replayStartedAt != nil {
+		duration = time.Since(*m.replayStartedAt)
+	}
+
+	errorMessage := ""
+	if m.replayError != nil {
+		errorMessage = m.replayError.Error()
+	} else if m.replayStartedAt == nil && m.replayedDuration == 0 {
+		errorMessage = noReplayExists
+	}
+
+	return dtos.ReplayStatus{
+		Running:      m.replayStartedAt != nil,
+		EventCount:   m.replayedEventCount,
+		Duration:     duration,
+		RepeatCount:  m.replayedRepeatCount,
+		ErrorMessage: errorMessage,
+	}
 }
 
 // ExportRecordedData returns the data for the last record session

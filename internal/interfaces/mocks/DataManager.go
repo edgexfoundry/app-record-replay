@@ -82,45 +82,31 @@ func (_m *DataManager) ImportRecordedData(data *dtos.RecordedData) error {
 }
 
 // RecordingStatus provides a mock function with given fields:
-func (_m *DataManager) RecordingStatus() *dtos.RecordStatus {
+func (_m *DataManager) RecordingStatus() dtos.RecordStatus {
 	ret := _m.Called()
 
-	var r0 *dtos.RecordStatus
-	if rf, ok := ret.Get(0).(func() *dtos.RecordStatus); ok {
+	var r0 dtos.RecordStatus
+	if rf, ok := ret.Get(0).(func() dtos.RecordStatus); ok {
 		r0 = rf()
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*dtos.RecordStatus)
-		}
+		r0 = ret.Get(0).(dtos.RecordStatus)
 	}
 
 	return r0
 }
 
 // ReplayStatus provides a mock function with given fields:
-func (_m *DataManager) ReplayStatus() (*dtos.ReplayStatus, error) {
+func (_m *DataManager) ReplayStatus() dtos.ReplayStatus {
 	ret := _m.Called()
 
-	var r0 *dtos.ReplayStatus
-	var r1 error
-	if rf, ok := ret.Get(0).(func() (*dtos.ReplayStatus, error)); ok {
-		return rf()
-	}
-	if rf, ok := ret.Get(0).(func() *dtos.ReplayStatus); ok {
+	var r0 dtos.ReplayStatus
+	if rf, ok := ret.Get(0).(func() dtos.ReplayStatus); ok {
 		r0 = rf()
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*dtos.ReplayStatus)
-		}
+		r0 = ret.Get(0).(dtos.ReplayStatus)
 	}
 
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return r0
 }
 
 // StartRecording provides a mock function with given fields: request

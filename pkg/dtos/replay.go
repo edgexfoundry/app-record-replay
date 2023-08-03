@@ -39,4 +39,6 @@ type ReplayStatus struct {
 	Duration time.Duration `json:"duration"`
 	// RepeatCount is the number of times the replay of the recorded data has been completed.
 	RepeatCount int `json:"repeatCount"`
+	// ErrorMessage contains the error message if an error occurred during replay
+	ErrorMessage string
 }

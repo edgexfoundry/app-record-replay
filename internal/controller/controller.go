@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 	"strconv"
 
 	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
@@ -49,12 +48,14 @@ const (
 	failedReplay                   = "Replay failed"
 	failedDataCompression          = "failed to compress recorded data of type"
 	failedToUncompressData         = "failed to uncompress data"
+	failedImportingData            = "Import data failed"
+	noDataFound                    = "no recorded data found"
 
 	noCompression       = ""
 	zlibCompression     = "ZLIB"
 	gzipCompression     = "GZIP"
-	failedImportingData = "Import data failed"
-	noDataFound         = "no recorded data found"
+	contenEncodingGzip  = "gzip"
+	contentEncodingZlib = "deflate" // standard value used for zlib is deflate
 )
 
 type httpController struct {
@@ -237,12 +238,6 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 		return
 	}
 
-	if reflect.DeepEqual(recordedData, &dtos.RecordedData{}) {
-		writer.WriteHeader(http.StatusNoContent)
-		_, _ = writer.Write([]byte(noDataFound))
-		return
-	}
-
 	compression := request.URL.Query().Get("compression")
 	switch compression {
 	case noCompression:
@@ -298,52 +293,75 @@ func (c *httpController) importRecordedData(writer http.ResponseWriter, request 
 	var err error
 	var overWriteProfilesDevices bool
 
-	compression := request.URL.Query().Get("compression")
-	overWriteProfilesDevices, err = strconv.ParseBool(request.URL.Query().Get("overwrite"))
-	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("failed to parse overwrite parameter: %v", err)))
+	contentType := request.Header.Get(common.ContentType)
+	if contentType != common.ContentTypeJSON {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("Invalid content type '%s'. Must be application/json", contentType)))
+		return
 	}
 
-	if len(compression) == 0 {
-		err = json.NewDecoder(request.Body).Decode(&importedRecordedData)
-		if err != nil {
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
-		}
+	queryParam := request.URL.Query().Get("overwrite")
+	if len(queryParam) == 0 {
+		overWriteProfilesDevices = true
 	} else {
-		switch compression {
-		case "GZIP":
-			reader, err = gzip.NewReader(request.Body)
-			if err != nil {
-				writer.WriteHeader(http.StatusInternalServerError)
-				_, _ = writer.Write([]byte(fmt.Sprintf("%s: %s", failedToUncompressData, err)))
-			}
-
-		case "ZLIB":
-			reader, err = zlib.NewReader(request.Body)
-			if err != nil {
-				writer.WriteHeader(http.StatusInternalServerError)
-				_, _ = writer.Write([]byte(fmt.Sprintf("%s: %s", failedToUncompressData, err)))
-			}
-		default:
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte("compression format not supported"))
-			return
-
-		}
-		defer reader.Close()
-		err = json.NewDecoder(reader).Decode(&importedRecordedData)
+		overWriteProfilesDevices, err = strconv.ParseBool(queryParam)
 		if err != nil {
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(fmt.Sprintf("failed to parse overwrite parameter: %v", err)))
+			return
 		}
 	}
 
-	emptydata := &dtos.RecordedData{}
-	if reflect.DeepEqual(importedRecordedData, emptydata) {
-		writer.WriteHeader(http.StatusNoContent)
-		_, _ = writer.Write([]byte(noDataFound))
+	compression := request.Header.Get("Content-Encoding")
+	switch compression {
+
+	case noCompression:
+		reader = request.Body
+
+	case contenEncodingGzip:
+		reader, err = gzip.NewReader(request.Body)
+		if err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(fmt.Sprintf("%s: %s", failedToUncompressData, err)))
+			return
+		}
+
+	case contentEncodingZlib:
+		reader, err = zlib.NewReader(request.Body)
+		if err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(fmt.Sprintf("%s: %s", failedToUncompressData, err)))
+			return
+		}
+	default:
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("compression format %s not supported", compression)))
+		return
+
+	}
+	defer reader.Close()
+	err = json.NewDecoder(reader).Decode(&importedRecordedData)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
+		return
+	}
+
+	if len(importedRecordedData.RecordedEvents) < 1 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: no recorded events", noDataFound)))
+		return
+	}
+
+	if len(importedRecordedData.Devices) < 1 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: no devices", noDataFound)))
+		return
+	}
+
+	if len(importedRecordedData.Profiles) < 1 {
+		writer.WriteHeader(http.StatusBadRequest)
+		_, _ = writer.Write([]byte(fmt.Sprintf("%s: no profiles", noDataFound)))
 		return
 	}
 

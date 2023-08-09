@@ -416,6 +416,7 @@ func (m *dataManager) ExportRecordedData() (*dtos.RecordedData, error) {
 }
 
 // ImportRecordedData imports data from a previously exported record session.
+// If overwrite parameter is true then Device Profiles and/or Devices will be overwritten.
 // An error is returned if a record or replay session is currently running or the data is incomplete
 func (m *dataManager) ImportRecordedData(data *dtos.RecordedData, overwrite bool) error {
 	//TODO implement me using TDD

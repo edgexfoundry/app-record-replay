@@ -3,9 +3,10 @@ module github.com/edgexfoundry/app-record-replay
 go 1.20
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.15
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.16
 	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.1.0-dev.9
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.1.0-dev.2
+	github.com/google/uuid v1.3.0
 	github.com/stretchr/testify v1.8.4
 )
 
@@ -14,7 +15,7 @@ require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/diegoholiveira/jsonlogic/v3 v3.2.7 // indirect
+	github.com/diegoholiveira/jsonlogic/v3 v3.3.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.4.3 // indirect
 	github.com/edgexfoundry/go-mod-configuration/v3 v3.1.0-dev.3 // indirect
 	github.com/edgexfoundry/go-mod-messaging/v3 v3.1.0-dev.11 // indirect
@@ -32,7 +33,6 @@ require (
 	github.com/go-redis/redis/v7 v7.3.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/gomodule/redigo v1.8.9 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/consul/api v1.22.0 // indirect

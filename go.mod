@@ -3,7 +3,7 @@ module github.com/edgexfoundry/app-record-replay
 go 1.20
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.16
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.18
 	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.1.0-dev.9
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.1.0-dev.2
 	github.com/google/uuid v1.3.0
@@ -22,7 +22,7 @@ require (
 	github.com/edgexfoundry/go-mod-registry/v3 v3.1.0-dev.3 // indirect
 	github.com/edgexfoundry/go-mod-secrets/v3 v3.1.0-dev.3 // indirect
 	github.com/fatih/color v1.14.1 // indirect
-	github.com/fxamacker/cbor/v2 v2.4.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect

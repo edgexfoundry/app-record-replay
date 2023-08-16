@@ -772,7 +772,6 @@ func TestDataManager_CancelReplay(t *testing.T) {
 			mockLogger := &loggerMocks.LoggingClient{}
 			mockLogger.On("Debug", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-			//mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)

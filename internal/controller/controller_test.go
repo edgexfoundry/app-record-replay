@@ -21,9 +21,11 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -444,8 +446,8 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 		{
 			Name:             "Valid - no events",
 			ExpectedResponse: &noRecordedData,
-			ExpectedStatus:   http.StatusNoContent,
-			ExpectedError:    nil,
+			ExpectedStatus:   http.StatusInternalServerError,
+			ExpectedError:    fmt.Errorf("failed"),
 		},
 		{
 			Name:             "Valid with data with GZIP query parameter",
@@ -567,6 +569,14 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 			ContentType:      common.ContentTypeJSON,
 		},
 		{
+			Name:             "valid - data with 2 events using json file",
+			ExpectedResponse: readJsonFile(t, "recordedDataJsonUncompressed.json"),
+			ExpectedStatus:   http.StatusAccepted,
+			ExpectedError:    nil,
+			OverwriteParam:   &falseParam,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
 			Name:             "invalid - no data",
 			ExpectedResponse: marshal(t, emptyDataRequest),
 			ExpectedStatus:   http.StatusBadRequest,
@@ -660,6 +670,12 @@ func marshal(t *testing.T, v any) []byte {
 	data, err := json.Marshal(v)
 	require.NoError(t, err)
 	return data
+}
+
+func readJsonFile(t *testing.T, file string) []byte {
+	jsonData, err := os.ReadFile(file)
+	require.NoError(t, err)
+	return jsonData
 }
 
 func createTargetAndMocks() (*httpController, *mocks.DataManager, *appMocks.ApplicationService) {

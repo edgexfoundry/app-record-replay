@@ -37,6 +37,7 @@ type DataManager interface {
 	// An error is returned if the no record session was run or a record session is currently running
 	ExportRecordedData() (*dtos.RecordedData, error)
 	// ImportRecordedData imports data from a previously exported record session.
+	// If overwrite parameter is true then Device Profiles and/or Devices will be overwritten.
 	// An error is returned if a record or replay session is currently running or the data is incomplete
-	ImportRecordedData(data *dtos.RecordedData) error
+	ImportRecordedData(data *dtos.RecordedData, overwrite bool) error
 }

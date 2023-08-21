@@ -1,0 +1,62 @@
+{
+  "recordedEvents": [
+    {
+      "apiVersion": "",
+      "id": "",
+      "deviceName": "test",
+      "profileName": "test",
+      "sourceName": "",
+      "origin": 0,
+      "readings": [
+        {
+          "origin": 0,
+          "deviceName": "",
+          "resourceName": "",
+          "profileName": "",
+          "valueType": "",
+          "value": "1456.0"
+        }
+      ]
+    },
+    {
+      "apiVersion": "",
+      "id": "",
+      "deviceName": "test",
+      "profileName": "test",
+      "sourceName": "",
+      "origin": 0,
+      "readings": [
+        {
+          "origin": 0,
+          "deviceName": "",
+          "resourceName": "",
+          "profileName": "",
+          "valueType": "",
+          "value": "1457.0"
+        }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "id": "",
+      "name": "test",
+      "manufacturer": "",
+      "description": "",
+      "model": "",
+      "labels": null,
+      "deviceResources": null,
+      "deviceCommands": null
+    }
+  ],
+  "devices": [
+    {
+      "name": "test_device",
+      "adminState": "",
+      "operatingState": "",
+      "serviceName": "",
+      "profileName": "test",
+      "protocols": null
+    }
+  ]
+}

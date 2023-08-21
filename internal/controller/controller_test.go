@@ -21,9 +21,11 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -31,6 +33,7 @@ import (
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -443,8 +446,8 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 		{
 			Name:             "Valid - no events",
 			ExpectedResponse: &noRecordedData,
-			ExpectedStatus:   http.StatusNoContent,
-			ExpectedError:    nil,
+			ExpectedStatus:   http.StatusInternalServerError,
+			ExpectedError:    fmt.Errorf("failed"),
 		},
 		{
 			Name:             "Valid with data with GZIP query parameter",
@@ -503,13 +506,176 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 }
 
 func TestHttpController_ImportRecordedData(t *testing.T) {
-	// TODO: Implement using TDD
+	emptyDataRequest := dtos.RecordedData{}
+
+	recordedEventRequest := dtos.RecordedData{
+		RecordedEvents: []coreDtos.Event{
+			coreDtos.Event{
+				DeviceName:  "test",
+				ProfileName: "test",
+				Readings: []coreDtos.BaseReading{
+					coreDtos.BaseReading{
+						SimpleReading: coreDtos.SimpleReading{
+							Value: "1456.0",
+						},
+					},
+				},
+			},
+			coreDtos.Event{
+				DeviceName:  "test",
+				ProfileName: "test",
+				Readings: []coreDtos.BaseReading{
+					coreDtos.BaseReading{
+						SimpleReading: coreDtos.SimpleReading{
+							Value: "1457.0",
+						},
+					},
+				},
+			},
+		},
+		Devices: []coreDtos.Device{
+			coreDtos.Device{
+				Name:        "test_device",
+				ProfileName: "test",
+			},
+		},
+		Profiles: []coreDtos.DeviceProfile{
+			coreDtos.DeviceProfile{
+				DeviceProfileBasicInfo: coreDtos.DeviceProfileBasicInfo{
+					Name: "test",
+				},
+			},
+		},
+	}
+
+	trueParam := "true"
+	falseParam := "false"
+
+	tests := []struct {
+		Name             string
+		ContentEncoding  string
+		ContentType      string
+		OverwriteParam   *string
+		ExpectedResponse []byte
+		ExpectedStatus   int
+		ExpectedError    error
+	}{
+		{
+			Name:             "valid - data with 2 events",
+			ExpectedResponse: marshal(t, recordedEventRequest),
+			ExpectedStatus:   http.StatusAccepted,
+			ExpectedError:    nil,
+			OverwriteParam:   &falseParam,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
+			Name:             "valid - data with 2 events using json file",
+			ExpectedResponse: readJsonFile(t, "recordedDataJsonUncompressed.json"),
+			ExpectedStatus:   http.StatusAccepted,
+			ExpectedError:    nil,
+			OverwriteParam:   &falseParam,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
+			Name:             "invalid - no data",
+			ExpectedResponse: marshal(t, emptyDataRequest),
+			ExpectedStatus:   http.StatusBadRequest,
+			ExpectedError:    errors.New(noDataFound),
+			OverwriteParam:   &falseParam,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
+			Name:             "valid - data with 2 events and compressed gzip",
+			ContentEncoding:  contenEncodingGzip,
+			ExpectedResponse: compressData(t, "GZIP", recordedEventRequest),
+			ExpectedStatus:   http.StatusAccepted,
+			ExpectedError:    nil,
+			OverwriteParam:   &falseParam,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
+			Name:             "valid - data with 2 events and compressed zlib",
+			ContentEncoding:  contentEncodingZlib,
+			ExpectedResponse: compressData(t, "ZLIB", recordedEventRequest),
+			ExpectedStatus:   http.StatusAccepted,
+			ExpectedError:    nil,
+			OverwriteParam:   &falseParam,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
+			Name:             "valid - data with 2 events and compressed gzip w/ overwrite set to true",
+			ContentEncoding:  contenEncodingGzip,
+			ExpectedResponse: compressData(t, "GZIP", recordedEventRequest),
+			ExpectedStatus:   http.StatusAccepted,
+			ExpectedError:    nil,
+			OverwriteParam:   &trueParam,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
+			Name:             "valid - data with 2 events and compressed zlib  w/ overwrite set to nil",
+			ContentEncoding:  contentEncodingZlib,
+			ExpectedResponse: compressData(t, "ZLIB", recordedEventRequest),
+			ExpectedStatus:   http.StatusAccepted,
+			ExpectedError:    nil,
+			OverwriteParam:   nil,
+			ContentType:      common.ContentTypeJSON,
+		},
+		{
+			Name:             "invalid - bad Content-type",
+			ExpectedResponse: marshal(t, emptyDataRequest),
+			ExpectedStatus:   http.StatusBadRequest,
+			ExpectedError:    nil,
+			OverwriteParam:   &falseParam,
+			ContentType:      common.ContentTypeTOML,
+		},
+		{
+			Name:             "invalid - no Content-type",
+			ExpectedResponse: marshal(t, emptyDataRequest),
+			ExpectedStatus:   http.StatusBadRequest,
+			ExpectedError:    nil,
+			OverwriteParam:   &falseParam,
+			ContentType:      "",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			target, mockDataManager, _ := createTargetAndMocks()
+			handler := http.HandlerFunc(target.importRecordedData)
+			mockDataManager.On("ImportRecordedData", mock.Anything, mock.Anything).Return(test.ExpectedError)
+
+			req, err := http.NewRequest(http.MethodPost, dataRoute, bytes.NewReader(test.ExpectedResponse))
+			require.NoError(t, err)
+
+			req.Header.Set(common.ContentType, test.ContentType)
+			if len(test.ContentEncoding) > 0 {
+				req.Header.Set("Content-Encoding", test.ContentEncoding)
+			}
+
+			if test.OverwriteParam != nil {
+				query := req.URL.Query()
+				query.Add("overwrite", *test.OverwriteParam)
+				req.URL.RawQuery = query.Encode()
+			}
+
+			testRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(testRecorder, req)
+
+			require.Equal(t, test.ExpectedStatus, testRecorder.Code)
+		})
+	}
+
 }
 
 func marshal(t *testing.T, v any) []byte {
 	data, err := json.Marshal(v)
 	require.NoError(t, err)
 	return data
+}
+
+func readJsonFile(t *testing.T, file string) []byte {
+	jsonData, err := os.ReadFile(file)
+	require.NoError(t, err)
+	return jsonData
 }
 
 func createTargetAndMocks() (*httpController, *mocks.DataManager, *appMocks.ApplicationService) {
@@ -539,5 +705,28 @@ func uncompressData(t *testing.T, compressionType string, r io.Reader) *dtos.Rec
 	}
 
 	return &data
-	// PanicIfErr(json.NewDecoder(gr).Decode(&t))
+}
+
+func compressData(t *testing.T, compressionType string, data dtos.RecordedData) []byte {
+	buf := &bytes.Buffer{}
+	var jsondata []byte
+	var err error
+	switch compressionType {
+	case "GZIP":
+		gZipWriter := gzip.NewWriter(buf)
+		jsondata, err = json.Marshal(&data)
+		require.NoError(t, err)
+		_, err = gZipWriter.Write(jsondata)
+		require.NoError(t, err)
+		gZipWriter.Close()
+	case "ZLIB":
+		zlibWriter := zlib.NewWriter(buf)
+		jsondata, err = json.Marshal(&data)
+		require.NoError(t, err)
+		_, err = zlibWriter.Write(jsondata)
+		require.NoError(t, err)
+		zlibWriter.Close()
+	}
+
+	return buf.Bytes()
 }

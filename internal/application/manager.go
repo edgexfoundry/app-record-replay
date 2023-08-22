@@ -446,7 +446,7 @@ func (m *dataManager) ExportRecordedData() (*dtos.RecordedData, error) {
 	if len(m.recordedData.Devices) == 0 {
 		uniqueDevices := make(map[string]bool)
 		for _, event := range m.recordedData.Events {
-			if uniqueDevices[event.DeviceName] == false {
+			if !uniqueDevices[event.DeviceName] {
 				response, err := m.appSvc.DeviceClient().DeviceByName(context.Background(), event.DeviceName)
 				if err != nil {
 					m.recordedData.Devices = []coreDtos.Device{}
@@ -464,7 +464,7 @@ func (m *dataManager) ExportRecordedData() (*dtos.RecordedData, error) {
 	if len(m.recordedData.Profiles) == 0 {
 		uniqueProfiles := make(map[string]bool)
 		for _, device := range m.recordedData.Devices {
-			if uniqueProfiles[device.ProfileName] == false {
+			if !uniqueProfiles[device.ProfileName] {
 				response, err := m.appSvc.DeviceProfileClient().DeviceProfileByName(context.Background(), device.ProfileName)
 				if err != nil {
 					m.recordedData.Profiles = []coreDtos.DeviceProfile{}

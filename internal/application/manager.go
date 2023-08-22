@@ -45,6 +45,8 @@ const (
 	replayDeepCopyFailed               = "deep copy of event to be replayed failed: %v"
 	maxReplayDelayExceeded             = "%s delay exceeds the maximum replay delay of %s. Maximum replay delay is configurable using MaxReplayDelay App Setting"
 	noReplayExists                     = "no replay running or has previously been run"
+	deviceLoadFailed                   = "failed to load device %s for export: %w"
+	profileLoadFailed                  = "failed to load device profile %s for export: %w"
 )
 
 type recordedData struct {
@@ -425,11 +427,66 @@ func (m *dataManager) ReplayStatus() dtos.ReplayStatus {
 	}
 }
 
+var noEventsRecorded = errors.New("no events recorded")
+
 // ExportRecordedData returns the data for the last record session
 // An error is returned if the no record session was run or a record session is currently running
 func (m *dataManager) ExportRecordedData() (*dtos.RecordedData, error) {
-	//TODO implement me using TDD
-	return nil, errors.New("not implemented")
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	if m.recordedData == nil {
+		return nil, noRecordedData
+	}
+
+	if len(m.recordedData.Events) == 0 {
+		return nil, noEventsRecorded
+	}
+
+	if len(m.recordedData.Devices) == 0 {
+		uniqueDevices := make(map[string]bool)
+		for _, event := range m.recordedData.Events {
+			if uniqueDevices[event.DeviceName] == false {
+				response, err := m.appSvc.DeviceClient().DeviceByName(context.Background(), event.DeviceName)
+				if err != nil {
+					m.recordedData.Devices = []coreDtos.Device{}
+					return nil, fmt.Errorf(deviceLoadFailed, event.DeviceName, err)
+				}
+				uniqueDevices[event.DeviceName] = true
+				m.recordedData.Devices = append(m.recordedData.Devices, response.Device)
+			}
+		}
+
+		m.appSvc.LoggingClient().Debugf("ARR Export: Loaded %d devices for export", len(m.recordedData.Devices))
+	}
+
+	// Could have loaded all the devices and failed on profiles, so need to check profiles separately
+	if len(m.recordedData.Profiles) == 0 {
+		uniqueProfiles := make(map[string]bool)
+		for _, device := range m.recordedData.Devices {
+			if uniqueProfiles[device.ProfileName] == false {
+				response, err := m.appSvc.DeviceProfileClient().DeviceProfileByName(context.Background(), device.ProfileName)
+				if err != nil {
+					m.recordedData.Profiles = []coreDtos.DeviceProfile{}
+					return nil, fmt.Errorf(profileLoadFailed, device.ProfileName, err)
+				}
+				uniqueProfiles[device.ProfileName] = true
+				m.recordedData.Profiles = append(m.recordedData.Profiles, response.Profile)
+			}
+		}
+
+		m.appSvc.LoggingClient().Debugf("ARR Export: Loaded %d devices profiles for export", len(m.recordedData.Profiles))
+	}
+
+	m.appSvc.LoggingClient().Debugf("ARR Export: Exporting %d events, %d devices and %d device profiles",
+		len(m.recordedData.Events), len(m.recordedData.Devices), len(m.recordedData.Profiles))
+
+	return &dtos.RecordedData{
+			RecordedEvents: m.recordedData.Events,
+			Devices:        m.recordedData.Devices,
+			Profiles:       m.recordedData.Profiles,
+		},
+		nil
 }
 
 // ImportRecordedData imports data from a previously exported record session.

@@ -586,7 +586,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 		},
 		{
 			Name:             "valid - data with 2 events and compressed gzip",
-			ContentEncoding:  contenEncodingGzip,
+			ContentEncoding:  contentEncodingGzip,
 			ExpectedResponse: compressData(t, "GZIP", recordedEventRequest),
 			ExpectedStatus:   http.StatusAccepted,
 			ExpectedError:    nil,
@@ -604,7 +604,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 		},
 		{
 			Name:             "valid - data with 2 events and compressed gzip w/ overwrite set to true",
-			ContentEncoding:  contenEncodingGzip,
+			ContentEncoding:  contentEncodingGzip,
 			ExpectedResponse: compressData(t, "GZIP", recordedEventRequest),
 			ExpectedStatus:   http.StatusAccepted,
 			ExpectedError:    nil,

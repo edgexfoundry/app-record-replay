@@ -384,9 +384,6 @@ func TestHttpController_CancelReplay(t *testing.T) {
 }
 
 func TestHttpController_ExportRecordedData(t *testing.T) {
-	target, mockDataManager, _ := createTargetAndMocks()
-
-	handler := http.HandlerFunc(target.exportRecordedData)
 
 	noRecordedData := dtos.RecordedData{}
 
@@ -454,14 +451,14 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 			ExpectedResponse: &recordedData,
 			ExpectedStatus:   http.StatusOK,
 			ExpectedError:    nil,
-			QueryParam:       "GZIP",
+			QueryParam:       gzipCompression,
 		},
 		{
 			Name:             "Valid with data with ZLIB query parameter",
 			ExpectedResponse: &recordedData,
 			ExpectedStatus:   http.StatusOK,
 			ExpectedError:    nil,
-			QueryParam:       "ZLIB",
+			QueryParam:       zlibCompression,
 		},
 		{
 			Name:             "Valid with data with invalid GZ query parameter",
@@ -473,7 +470,10 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			mockDataManager.On("ExportRecordedData").Return(test.ExpectedResponse, test.ExpectedError).Once()
+			target, mockDataManager, _ := createTargetAndMocks()
+			mockDataManager.On("ExportRecordedData").Return(test.ExpectedResponse, test.ExpectedError)
+
+			handler := http.HandlerFunc(target.exportRecordedData)
 
 			req, err := http.NewRequest(http.MethodGet, dataRoute, nil)
 			require.NoError(t, err)
@@ -586,7 +586,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 		},
 		{
 			Name:             "valid - data with 2 events and compressed gzip",
-			ContentEncoding:  contenEncodingGzip,
+			ContentEncoding:  contentEncodingGzip,
 			ExpectedResponse: compressData(t, "GZIP", recordedEventRequest),
 			ExpectedStatus:   http.StatusAccepted,
 			ExpectedError:    nil,
@@ -604,7 +604,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 		},
 		{
 			Name:             "valid - data with 2 events and compressed gzip w/ overwrite set to true",
-			ContentEncoding:  contenEncodingGzip,
+			ContentEncoding:  contentEncodingGzip,
 			ExpectedResponse: compressData(t, "GZIP", recordedEventRequest),
 			ExpectedStatus:   http.StatusAccepted,
 			ExpectedError:    nil,
@@ -690,13 +690,13 @@ func createTargetAndMocks() (*httpController, *mocks.DataManager, *appMocks.Appl
 func uncompressData(t *testing.T, compressionType string, r io.Reader) *dtos.RecordedData {
 	data := dtos.RecordedData{}
 	switch compressionType {
-	case "GZIP":
+	case gzipCompression:
 		reader, err := gzip.NewReader(r)
 		require.NoError(t, err)
 		defer reader.Close()
 		err = json.NewDecoder(reader).Decode(&data)
 		require.NoError(t, err)
-	case "ZLIB":
+	case zlibCompression:
 		reader, err := zlib.NewReader(r)
 		require.NoError(t, err)
 		defer reader.Close()

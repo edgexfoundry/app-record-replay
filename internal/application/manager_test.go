@@ -25,9 +25,13 @@ import (
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
+	clientMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/interfaces/mocks"
 	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
+	commonDTO "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos/common"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos/responses"
+	edgexErr "github.com/edgexfoundry/go-mod-core-contracts/v3/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -839,7 +843,166 @@ func TestDataManager_CancelReplay(t *testing.T) {
 }
 
 func TestDataManager_ExportRecordedData(t *testing.T) {
-	// TODO: Implement using TDD
+	expectedEvents := []coreDtos.Event{
+		{
+			Versionable: commonDTO.Versionable{},
+			DeviceName:  "D1",
+			ProfileName: "P1",
+			SourceName:  "S1",
+			Readings: []coreDtos.BaseReading{
+				{
+					DeviceName:    "D1",
+					ResourceName:  "R1",
+					ProfileName:   "P1",
+					ValueType:     "Int32",
+					SimpleReading: coreDtos.SimpleReading{Value: "23"},
+				},
+			},
+		},
+		{
+			Versionable: commonDTO.Versionable{},
+			DeviceName:  "D1",
+			ProfileName: "P1",
+			SourceName:  "S2",
+			Readings: []coreDtos.BaseReading{
+				{
+					DeviceName:    "D1",
+					ResourceName:  "R2",
+					ProfileName:   "P1",
+					ValueType:     "Int64",
+					SimpleReading: coreDtos.SimpleReading{Value: "456"},
+				},
+			},
+		},
+		{
+			Versionable: commonDTO.Versionable{},
+			DeviceName:  "D2",
+			ProfileName: "P1",
+			SourceName:  "S1",
+			Readings: []coreDtos.BaseReading{
+				{
+					DeviceName:    "D2",
+					ResourceName:  "R1",
+					ProfileName:   "P1",
+					ValueType:     "Int31",
+					SimpleReading: coreDtos.SimpleReading{Value: "55"},
+				},
+			},
+		},
+		{
+			Versionable: commonDTO.Versionable{},
+			DeviceName:  "D3",
+			ProfileName: "P2",
+			SourceName:  "S2",
+			Readings: []coreDtos.BaseReading{
+				{
+					DeviceName:    "D3",
+					ResourceName:  "R2",
+					ProfileName:   "P2",
+					ValueType:     "String",
+					SimpleReading: coreDtos.SimpleReading{Value: "Hello"},
+				},
+			},
+		},
+	}
+
+	profileP1 := coreDtos.DeviceProfile{
+		DeviceProfileBasicInfo: coreDtos.DeviceProfileBasicInfo{
+			Name: "P1",
+		},
+	}
+	profileP2 := coreDtos.DeviceProfile{
+		DeviceProfileBasicInfo: coreDtos.DeviceProfileBasicInfo{
+			Name: "P2",
+		},
+	}
+	expectedProfiles := []coreDtos.DeviceProfile{
+		profileP1,
+		profileP2,
+	}
+
+	deviceD1 := coreDtos.Device{
+		Name:        "D1",
+		ServiceName: "Svc1",
+		ProfileName: "P1",
+	}
+	deviceD2 := coreDtos.Device{
+		Name:        "D2",
+		ServiceName: "Svc1",
+		ProfileName: "P1",
+	}
+	deviceD3 := coreDtos.Device{
+		Name:        "D3",
+		ServiceName: "Svc2",
+		ProfileName: "P2",
+	}
+	expectedDevices := []coreDtos.Device{
+		deviceD1,
+		deviceD2,
+		deviceD3,
+	}
+
+	expectedExportedData := dtos.RecordedData{
+		RecordedEvents: expectedEvents,
+		Profiles:       expectedProfiles,
+		Devices:        expectedDevices,
+	}
+
+	tests := []struct {
+		Name                 string
+		RecordedData         *recordedData
+		ExpectedExportedData *dtos.RecordedData
+		ExpectedDeviceError  edgexErr.EdgeX
+		ExpectedProfileError edgexErr.EdgeX
+		ExpectedError        error
+	}{
+		{"Valid", &recordedData{Events: expectedEvents}, &expectedExportedData, nil, nil, nil},
+		{"No data", nil, nil, nil, nil, noRecordedData},
+		{"No Events", &recordedData{}, nil, nil, nil, noEventsRecorded},
+		{"Device load err", &recordedData{Events: expectedEvents}, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device")), nil, errors.New("failed to load device")},
+		{"Profile load err", &recordedData{Events: expectedEvents}, nil, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device profile")), errors.New("failed to load device profile")},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceByName", mock.Anything, "D1").
+				Return(responses.DeviceResponse{Device: deviceD1}, test.ExpectedDeviceError)
+			mockDeviceClient.On("DeviceByName", mock.Anything, "D2").
+				Return(responses.DeviceResponse{Device: deviceD2}, test.ExpectedDeviceError)
+			mockDeviceClient.On("DeviceByName", mock.Anything, "D3").
+				Return(responses.DeviceResponse{Device: deviceD3}, test.ExpectedDeviceError)
+
+			mockProfileClient := &clientMocks.DeviceProfileClient{}
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P1").
+				Return(responses.DeviceProfileResponse{Profile: profileP1}, test.ExpectedProfileError)
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P2").
+				Return(responses.DeviceProfileResponse{Profile: profileP2}, test.ExpectedProfileError)
+
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
+			mockSdk.On("DeviceProfileClient").Return(mockProfileClient)
+
+			target := NewManager(mockSdk, time.Minute).(*dataManager)
+
+			target.recordedData = test.RecordedData
+
+			actualExportedData, err := target.ExportRecordedData()
+
+			if test.ExpectedError != nil {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, test.ExpectedError.Error())
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, *test.ExpectedExportedData, *actualExportedData)
+		})
+	}
 }
 
 func TestDataManager_ImportRecordedData(t *testing.T) {

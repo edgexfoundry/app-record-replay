@@ -52,9 +52,9 @@ const (
 	noDataFound                    = "no recorded data found"
 
 	noCompression       = ""
-	zlibCompression     = "ZLIB"
-	gzipCompression     = "GZIP"
-	contenEncodingGzip  = "gzip"
+	zlibCompression     = "zlib"
+	gzipCompression     = "gzip"
+	contentEncodingGzip = "gzip"
 	contentEncodingZlib = "deflate" // standard value used for zlib is deflate
 )
 
@@ -252,7 +252,7 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 		_, _ = writer.Write(jsonResponse)
 
 	case zlibCompression:
-		writer.Header().Set("Content-Encoding", "ZLIB")
+		writer.Header().Set("Content-Encoding", contentEncodingZlib)
 		writer.Header().Set("Content-Type", "application/json")
 		zlibWriter := zlib.NewWriter(writer)
 		defer zlibWriter.Close()
@@ -262,10 +262,9 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 			_, _ = writer.Write([]byte(fmt.Sprintf("%s %s: %s", failedDataCompression, zlibCompression, err)))
 			return
 		}
-		writer.WriteHeader(http.StatusOK)
 
 	case gzipCompression:
-		writer.Header().Set("Content-Encoding", "GZIP")
+		writer.Header().Set("Content-Encoding", contentEncodingGzip)
 		writer.Header().Set("Content-Type", "application/json")
 		gZipWriter := gzip.NewWriter(writer)
 		defer gZipWriter.Close()
@@ -275,7 +274,6 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 			_, _ = writer.Write([]byte(fmt.Sprintf("%s %s: %s", failedDataCompression, gzipCompression, err)))
 			return
 		}
-		writer.WriteHeader(http.StatusOK)
 
 	default:
 		writer.WriteHeader(http.StatusInternalServerError)
@@ -318,7 +316,7 @@ func (c *httpController) importRecordedData(writer http.ResponseWriter, request 
 	case noCompression:
 		reader = request.Body
 
-	case contenEncodingGzip:
+	case contentEncodingGzip:
 		reader, err = gzip.NewReader(request.Body)
 		if err != nil {
 			writer.WriteHeader(http.StatusBadRequest)

@@ -18,6 +18,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -560,8 +561,13 @@ func TestDataManager_StartReplay_Cancel(t *testing.T) {
 			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceByName", mock.Anything, mock.Anything).
+				Return(responses.DeviceResponse{Device: coreDtos.Device{Name: "D1", ServiceName: expectedServiceName}}, nil)
+
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
 			mockSdk.On("AppContext").Return(appCtx)
 			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -672,8 +678,13 @@ func TestDataManager_ReplayStatus(t *testing.T) {
 			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceByName", mock.Anything, mock.Anything).
+				Return(responses.DeviceResponse{Device: coreDtos.Device{Name: "D1", ServiceName: expectedServiceName}}, nil)
+
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
 			mockSdk.On("AppContext").Return(context.Background())
 			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(test.ExpectedReplayError)
 
@@ -783,8 +794,13 @@ func TestDataManager_CancelReplay(t *testing.T) {
 			mockLogger.On("Debug", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceByName", mock.Anything, mock.Anything).
+				Return(responses.DeviceResponse{Device: coreDtos.Device{Name: "D1", ServiceName: expectedServiceName}}, nil)
+
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
 			mockSdk.On("AppContext").Return(context.Background())
 			mockSdk.On("PublishWithTopic", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -1006,7 +1022,29 @@ func TestDataManager_ExportRecordedData(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, *test.ExpectedExportedData, *actualExportedData)
+
+			// Since actual data may not be in the same order as the expected data, we must compare element individually
+			// Events should be in the expected order, but devices and profile were created from a map which can have random ordering.
+			assert.Equal(t, test.ExpectedExportedData.RecordedEvents, actualExportedData.RecordedEvents)
+			for _, expectedDevice := range test.ExpectedExportedData.Devices {
+				found := false
+				for _, actualDevice := range actualExportedData.Devices {
+					if actualDevice.Name == expectedDevice.Name {
+						found = true
+					}
+				}
+				assert.True(t, found, fmt.Sprintf("Expected device %s not found in actual devices: %v", expectedDevice.Name, actualExportedData.Devices))
+			}
+			for _, expectedProfile := range test.ExpectedExportedData.Profiles {
+				found := false
+				for _, actualProfile := range actualExportedData.Profiles {
+					if actualProfile.Name == expectedProfile.Name {
+						found = true
+					}
+				}
+				assert.True(t, found, fmt.Sprintf("Expected profile %s not found in actual profiles: %v", expectedProfile.Name, actualExportedData.Profiles))
+			}
+
 		})
 	}
 }

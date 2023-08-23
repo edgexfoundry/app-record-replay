@@ -38,6 +38,7 @@ import (
 )
 
 const (
+	expectedServiceName = "testService"
 	expectedProfileName = "testProfile"
 	expectedDeviceName  = "testDevice"
 	expectedSourceName  = "testSource"
@@ -352,7 +353,7 @@ func TestDataManager_CancelRecording(t *testing.T) {
 
 func TestDataManager_StartReplay(t *testing.T) {
 	expectedTopic := common.BuildTopic(strings.Replace(common.CoreDataEventSubscribeTopic, "/#", "", 1),
-		expectedProfileName, expectedDeviceName, expectedSourceName)
+		expectedServiceName, expectedProfileName, expectedDeviceName, expectedSourceName)
 	goodRequest := dtos.ReplayRequest{
 		ReplayRate:  1,
 		RepeatCount: 2,
@@ -445,8 +446,13 @@ func TestDataManager_StartReplay(t *testing.T) {
 			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 			mockLogger.On("Errorf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceByName", mock.Anything, mock.Anything).
+				Return(responses.DeviceResponse{Device: coreDtos.Device{Name: "D1", ServiceName: expectedServiceName}}, nil)
+
 			mockSdk := &mocks.ApplicationService{}
 			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
 			mockSdk.On("AppContext").Return(context.Background())
 			mockSdk.On("PublishWithTopic", expectedTopic, mock.Anything, common.ContentTypeJSON).Return(test.ExpectedPublishError)
 			target := NewManager(mockSdk, test.MaxReplayDelayLimit).(*dataManager)

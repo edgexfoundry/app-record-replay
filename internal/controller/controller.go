@@ -241,6 +241,7 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 	compression := request.URL.Query().Get("compression")
 	switch compression {
 	case noCompression:
+		c.appSdk.LoggingClient().Debug("ARR Export - Exporting as JSON w/o compression")
 		jsonResponse, err := json.Marshal(recordedData)
 		if err != nil {
 			writer.WriteHeader(http.StatusInternalServerError)
@@ -252,6 +253,7 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 		_, _ = writer.Write(jsonResponse)
 
 	case zlibCompression:
+		c.appSdk.LoggingClient().Debug("ARR Export - Exporting as JSON using ZLIB compression")
 		writer.Header().Set("Content-Encoding", contentEncodingZlib)
 		writer.Header().Set("Content-Type", "application/json")
 		zlibWriter := zlib.NewWriter(writer)
@@ -264,6 +266,7 @@ func (c *httpController) exportRecordedData(writer http.ResponseWriter, request 
 		}
 
 	case gzipCompression:
+		c.appSdk.LoggingClient().Debug("ARR Export - Exporting as JSON using GZIP compression")
 		writer.Header().Set("Content-Encoding", contentEncodingGzip)
 		writer.Header().Set("Content-Type", "application/json")
 		gZipWriter := gzip.NewWriter(writer)
@@ -314,9 +317,11 @@ func (c *httpController) importRecordedData(writer http.ResponseWriter, request 
 	switch compression {
 
 	case noCompression:
+		c.appSdk.LoggingClient().Debug("ARR Import - Importing as JSON w/o compression")
 		reader = request.Body
 
 	case contentEncodingGzip:
+		c.appSdk.LoggingClient().Debug("ARR Import - Importing as JSON using GZIP compression")
 		reader, err = gzip.NewReader(request.Body)
 		if err != nil {
 			writer.WriteHeader(http.StatusBadRequest)
@@ -325,6 +330,7 @@ func (c *httpController) importRecordedData(writer http.ResponseWriter, request 
 		}
 
 	case contentEncodingZlib:
+		c.appSdk.LoggingClient().Debug("ARR Import - Importing as JSON using ZLIB compression")
 		reader, err = zlib.NewReader(request.Body)
 		if err != nil {
 			writer.WriteHeader(http.StatusBadRequest)

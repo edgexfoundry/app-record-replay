@@ -19,12 +19,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces/mocks"
+	"github.com/edgexfoundry/app-record-replay/internal/utils"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
 	clientMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/interfaces/mocks"
 	loggerMocks "github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger/mocks"
@@ -662,7 +664,7 @@ func TestDataManager_ReplayStatus(t *testing.T) {
 			NoReplayRan: true,
 			Request:     shortReplayRequest,
 			ExpectedStatus: dtos.ReplayStatus{
-				ErrorMessage: noReplayExists,
+				Message: noReplayExists,
 			},
 		},
 		{
@@ -720,7 +722,7 @@ func TestDataManager_ReplayStatus(t *testing.T) {
 				assert.Equal(t, test.ExpectedStatus.Running, actualStatus.Running)
 				assert.NotZero(t, actualStatus.EventCount)
 				assert.NotZero(t, actualStatus.Duration)
-				assert.Empty(t, actualStatus.ErrorMessage)
+				assert.Empty(t, actualStatus.Message)
 				return
 			}
 
@@ -747,8 +749,8 @@ func TestDataManager_ReplayStatus(t *testing.T) {
 
 			if test.ExpectedReplayError != nil {
 				assert.Equal(t, test.ExpectedStatus.Running, actualStatus.Running)
-				require.NotEmpty(t, actualStatus.ErrorMessage)
-				assert.Contains(t, actualStatus.ErrorMessage, test.ExpectedReplayError.Error())
+				require.NotEmpty(t, actualStatus.Message)
+				assert.Contains(t, actualStatus.Message, test.ExpectedReplayError.Error())
 				return
 			}
 
@@ -758,7 +760,7 @@ func TestDataManager_ReplayStatus(t *testing.T) {
 			assert.Equal(t, test.ExpectedStatus.EventCount, actualStatus.EventCount)
 			assert.Equal(t, test.ExpectedStatus.RepeatCount, actualStatus.RepeatCount)
 			assert.NotZero(t, actualStatus.Duration)
-			assert.Empty(t, actualStatus.ErrorMessage)
+			assert.Empty(t, actualStatus.Message)
 		})
 	}
 }
@@ -865,6 +867,276 @@ func TestDataManager_CancelReplay(t *testing.T) {
 }
 
 func TestDataManager_ExportRecordedData(t *testing.T) {
+	expectedExportedData, testDevices, testProfiles := createTestRecordedData()
+
+	tests := []struct {
+		Name                 string
+		RecordedData         *recordedData
+		ExpectedExportedData *dtos.RecordedData
+		MockDeviceError      edgexErr.EdgeX
+		MockProfileError     edgexErr.EdgeX
+		ExpectedError        error
+	}{
+		{"Valid", &recordedData{Events: expectedExportedData.RecordedEvents}, &expectedExportedData, nil, nil, nil},
+		{"No data", nil, nil, nil, nil, noRecordedData},
+		{"No Events", &recordedData{}, nil, nil, nil, noEventsRecorded},
+		{"Device load err", &recordedData{Events: expectedExportedData.RecordedEvents}, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device")), nil, errors.New("failed to load device")},
+		{"Profile load err", &recordedData{Events: expectedExportedData.RecordedEvents}, nil, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device profile")), errors.New("failed to load device profile")},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceByName", mock.Anything, "D1").
+				Return(responses.DeviceResponse{Device: *testDevices["D1"]}, test.MockDeviceError)
+			mockDeviceClient.On("DeviceByName", mock.Anything, "D2").
+				Return(responses.DeviceResponse{Device: *testDevices["D2"]}, test.MockDeviceError)
+			mockDeviceClient.On("DeviceByName", mock.Anything, "D3").
+				Return(responses.DeviceResponse{Device: *testDevices["D3"]}, test.MockDeviceError)
+
+			mockProfileClient := &clientMocks.DeviceProfileClient{}
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P1").
+				Return(responses.DeviceProfileResponse{Profile: *testProfiles["P1"]}, test.MockProfileError)
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P2").
+				Return(responses.DeviceProfileResponse{Profile: *testProfiles["P2"]}, test.MockProfileError)
+
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
+			mockSdk.On("DeviceProfileClient").Return(mockProfileClient)
+
+			target := NewManager(mockSdk, time.Minute).(*dataManager)
+
+			target.recordedData = test.RecordedData
+
+			actualExportedData, err := target.ExportRecordedData()
+
+			if test.ExpectedError != nil {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, test.ExpectedError.Error())
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Since actual data may not be in the same order as the expected data, we must compare element individually
+			// Events should be in the expected order, but devices and profile were created from a map which can have random ordering.
+			assert.Equal(t, test.ExpectedExportedData.RecordedEvents, actualExportedData.RecordedEvents)
+			for _, expectedDevice := range test.ExpectedExportedData.Devices {
+				found := false
+				for _, actualDevice := range actualExportedData.Devices {
+					if actualDevice.Name == expectedDevice.Name {
+						found = true
+					}
+				}
+				assert.True(t, found, fmt.Sprintf("Expected device %s not found in actual devices: %v", expectedDevice.Name, actualExportedData.Devices))
+			}
+			for _, expectedProfile := range test.ExpectedExportedData.Profiles {
+				found := false
+				for _, actualProfile := range actualExportedData.Profiles {
+					if actualProfile.Name == expectedProfile.Name {
+						found = true
+					}
+				}
+				assert.True(t, found, fmt.Sprintf("Expected profile %s not found in actual profiles: %v", expectedProfile.Name, actualExportedData.Profiles))
+			}
+
+		})
+	}
+}
+
+func TestDataManager_ImportRecordedData_NoDataErrors(t *testing.T) {
+	expectedImportData, _, _ := createTestRecordedData()
+
+	tests := []struct {
+		Name                string
+		ImportData          *dtos.RecordedData
+		OverwriteFiles      bool
+		RecordingInProgress bool
+		ReplayInProgress    bool
+		ExpectedError       error
+	}{
+		{"Valid", &expectedImportData, true, false, false, nil},
+		{"Valid - no overwrite", &expectedImportData, false, false, false, nil},
+		{"Recording In Progress error", nil, true, true, false, recordingInProgressError},
+		{"Replay In Progress error", nil, true, false, true, replayInProgressError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceNameExists", mock.Anything, "D1").
+				Return(commonDTO.BaseResponse{StatusCode: http.StatusNotFound},
+					edgexErr.NewCommonEdgeX(edgexErr.KindEntityDoesNotExist, "", nil))
+			mockDeviceClient.On("DeviceNameExists", mock.Anything, "D2").
+				Return(commonDTO.BaseResponse{StatusCode: http.StatusNotFound},
+					edgexErr.NewCommonEdgeX(edgexErr.KindEntityDoesNotExist, "", nil))
+			mockDeviceClient.On("DeviceNameExists", mock.Anything, "D3").
+				Return(commonDTO.BaseResponse{StatusCode: http.StatusOK}, nil)
+
+			mockDeviceClient.On("Add", mock.Anything, mock.Anything).Return(nil, nil)
+			mockDeviceClient.On("Update", mock.Anything, mock.Anything).Return(nil, nil)
+
+			mockProfileClient := &clientMocks.DeviceProfileClient{}
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P1").
+				Return(responses.DeviceProfileResponse{},
+					edgexErr.NewCommonEdgeX(edgexErr.KindEntityDoesNotExist, "", nil))
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P2").
+				Return(responses.DeviceProfileResponse{}, nil)
+			mockProfileClient.On("Add", mock.Anything, mock.Anything).Return(nil, nil)
+			mockProfileClient.On("DeleteByName", mock.Anything, mock.Anything).
+				Return(commonDTO.BaseResponse{}, nil)
+
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
+			mockSdk.On("DeviceProfileClient").Return(mockProfileClient)
+
+			target := NewManager(mockSdk, time.Minute).(*dataManager)
+
+			now := time.Now()
+
+			if test.RecordingInProgress {
+				target.recordingStartedAt = &now
+			}
+
+			if test.ReplayInProgress {
+				target.replayStartedAt = &now
+			}
+
+			err := target.ImportRecordedData(test.ImportData, test.OverwriteFiles)
+
+			if test.ExpectedError != nil {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, test.ExpectedError.Error())
+				return
+			}
+
+			require.NoError(t, err)
+
+			require.NotNil(t, target.recordedData)
+			require.NotEmpty(t, target.recordedData.Events)
+			require.NotEmpty(t, target.recordedData.Devices)
+			require.NotEmpty(t, target.recordedData.Profiles)
+
+			assert.Equal(t, test.ImportData.RecordedEvents, target.recordedData.Events)
+			for _, expectedDevice := range test.ImportData.Devices {
+				_, exists := target.recordedData.Devices[expectedDevice.Name]
+				assert.True(t, exists, fmt.Sprintf("Expected device %s not found in actual devices: %v", expectedDevice.Name, target.recordedData.Devices))
+			}
+			for _, expectedProfile := range test.ImportData.Profiles {
+				_, exists := target.recordedData.Profiles[expectedProfile.Name]
+				assert.True(t, exists, fmt.Sprintf("Expected profile %s not found in actual profiles: %v", expectedProfile.Name, target.recordedData.Profiles))
+			}
+		})
+	}
+}
+
+func TestDataManager_ImportRecordedData_DataErrors(t *testing.T) {
+	expectedImportData, _, _ := createTestRecordedData()
+
+	deviceUploadError := errors.New("failed upload device")
+	profileUploadError := errors.New("failed upload profile")
+
+	tests := []struct {
+		Name                  string
+		ImportData            *dtos.RecordedData
+		MockGetDeviceError    edgexErr.EdgeX
+		MockAddDeviceError    edgexErr.EdgeX
+		MockUpdateDeviceError edgexErr.EdgeX
+		MockGetProfileError   edgexErr.EdgeX
+		MockAddProfileError   edgexErr.EdgeX
+		ExpectedError         error
+	}{
+		{"Device By Name error",
+			&expectedImportData,
+			edgexErr.NewCommonEdgeXWrapper(deviceUploadError),
+			nil,
+			nil,
+			nil,
+			nil,
+			deviceUploadError},
+		{"Device Add error",
+			&expectedImportData,
+			nil,
+			edgexErr.NewCommonEdgeXWrapper(deviceUploadError),
+			nil,
+			nil,
+			nil,
+			deviceUploadError},
+		{"Device Update error",
+			&expectedImportData,
+			nil,
+			nil,
+			edgexErr.NewCommonEdgeXWrapper(deviceUploadError),
+			nil,
+			nil,
+			deviceUploadError},
+		{"Profile Get error",
+			&expectedImportData,
+			nil,
+			nil,
+			nil,
+			edgexErr.NewCommonEdgeXWrapper(profileUploadError),
+			nil,
+			profileUploadError},
+		{"Profile Add error",
+			&expectedImportData,
+			nil,
+			nil,
+			nil,
+			nil,
+			edgexErr.NewCommonEdgeXWrapper(profileUploadError),
+			profileUploadError}}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			mockDeviceClient := &clientMocks.DeviceClient{}
+			mockDeviceClient.On("DeviceNameExists", mock.Anything, "D1").
+				Return(commonDTO.BaseResponse{}, test.MockGetDeviceError)
+			mockDeviceClient.On("DeviceNameExists", mock.Anything, "D2").
+				Return(commonDTO.BaseResponse{}, edgexErr.NewCommonEdgeX(edgexErr.KindEntityDoesNotExist, "", nil))
+			mockDeviceClient.On("DeviceNameExists", mock.Anything, "D3").
+				Return(commonDTO.BaseResponse{}, nil)
+			mockDeviceClient.On("Add", mock.Anything, mock.Anything).
+				Return(nil, test.MockAddDeviceError)
+			mockDeviceClient.On("Update", mock.Anything, mock.Anything).
+				Return(nil, test.MockUpdateDeviceError)
+
+			mockProfileClient := &clientMocks.DeviceProfileClient{}
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P1").
+				Return(responses.DeviceProfileResponse{},
+					edgexErr.NewCommonEdgeX(edgexErr.KindEntityDoesNotExist, "", nil))
+			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P2").
+				Return(responses.DeviceProfileResponse{}, test.MockGetProfileError)
+			mockProfileClient.On("Add", mock.Anything, mock.Anything).
+				Return(nil, test.MockAddProfileError)
+
+			mockLogger := &loggerMocks.LoggingClient{}
+			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+			mockSdk := &mocks.ApplicationService{}
+			mockSdk.On("LoggingClient").Return(mockLogger)
+			mockSdk.On("DeviceClient").Return(mockDeviceClient)
+			mockSdk.On("DeviceProfileClient").Return(mockProfileClient)
+
+			target := NewManager(mockSdk, time.Minute).(*dataManager)
+
+			err := target.ImportRecordedData(test.ImportData, true)
+
+			require.Error(t, err)
+			assert.ErrorContains(t, err, test.ExpectedError.Error(), fmt.Sprintf("Actual error is: %v", err))
+		})
+	}
+}
+
+func createTestRecordedData() (dtos.RecordedData, map[string]*coreDtos.Device, map[string]*coreDtos.DeviceProfile) {
 	expectedEvents := []coreDtos.Event{
 		{
 			Versionable: commonDTO.Versionable{},
@@ -938,9 +1210,10 @@ func TestDataManager_ExportRecordedData(t *testing.T) {
 			Name: "P2",
 		},
 	}
-	expectedProfiles := []coreDtos.DeviceProfile{
-		profileP1,
-		profileP2,
+
+	expectedProfiles := map[string]*coreDtos.DeviceProfile{
+		profileP1.Name: &profileP1,
+		profileP2.Name: &profileP2,
 	}
 
 	deviceD1 := coreDtos.Device{
@@ -958,99 +1231,20 @@ func TestDataManager_ExportRecordedData(t *testing.T) {
 		ServiceName: "Svc2",
 		ProfileName: "P2",
 	}
-	expectedDevices := []coreDtos.Device{
-		deviceD1,
-		deviceD2,
-		deviceD3,
+
+	expectedDevices := map[string]*coreDtos.Device{
+		deviceD1.Name: &deviceD1,
+		deviceD2.Name: &deviceD2,
+		deviceD3.Name: &deviceD3,
 	}
 
-	expectedExportedData := dtos.RecordedData{
+	testRecordedData := dtos.RecordedData{
 		RecordedEvents: expectedEvents,
-		Profiles:       expectedProfiles,
-		Devices:        expectedDevices,
+		Profiles:       utils.MapToSlice(expectedProfiles),
+		Devices:        utils.MapToSlice(expectedDevices),
 	}
 
-	tests := []struct {
-		Name                 string
-		RecordedData         *recordedData
-		ExpectedExportedData *dtos.RecordedData
-		ExpectedDeviceError  edgexErr.EdgeX
-		ExpectedProfileError edgexErr.EdgeX
-		ExpectedError        error
-	}{
-		{"Valid", &recordedData{Events: expectedEvents}, &expectedExportedData, nil, nil, nil},
-		{"No data", nil, nil, nil, nil, noRecordedData},
-		{"No Events", &recordedData{}, nil, nil, nil, noEventsRecorded},
-		{"Device load err", &recordedData{Events: expectedEvents}, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device")), nil, errors.New("failed to load device")},
-		{"Profile load err", &recordedData{Events: expectedEvents}, nil, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device profile")), errors.New("failed to load device profile")},
-	}
-
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			mockDeviceClient := &clientMocks.DeviceClient{}
-			mockDeviceClient.On("DeviceByName", mock.Anything, "D1").
-				Return(responses.DeviceResponse{Device: deviceD1}, test.ExpectedDeviceError)
-			mockDeviceClient.On("DeviceByName", mock.Anything, "D2").
-				Return(responses.DeviceResponse{Device: deviceD2}, test.ExpectedDeviceError)
-			mockDeviceClient.On("DeviceByName", mock.Anything, "D3").
-				Return(responses.DeviceResponse{Device: deviceD3}, test.ExpectedDeviceError)
-
-			mockProfileClient := &clientMocks.DeviceProfileClient{}
-			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P1").
-				Return(responses.DeviceProfileResponse{Profile: profileP1}, test.ExpectedProfileError)
-			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P2").
-				Return(responses.DeviceProfileResponse{Profile: profileP2}, test.ExpectedProfileError)
-
-			mockLogger := &loggerMocks.LoggingClient{}
-			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-
-			mockSdk := &mocks.ApplicationService{}
-			mockSdk.On("LoggingClient").Return(mockLogger)
-			mockSdk.On("DeviceClient").Return(mockDeviceClient)
-			mockSdk.On("DeviceProfileClient").Return(mockProfileClient)
-
-			target := NewManager(mockSdk, time.Minute).(*dataManager)
-
-			target.recordedData = test.RecordedData
-
-			actualExportedData, err := target.ExportRecordedData()
-
-			if test.ExpectedError != nil {
-				require.Error(t, err)
-				assert.ErrorContains(t, err, test.ExpectedError.Error())
-				return
-			}
-
-			require.NoError(t, err)
-
-			// Since actual data may not be in the same order as the expected data, we must compare element individually
-			// Events should be in the expected order, but devices and profile were created from a map which can have random ordering.
-			assert.Equal(t, test.ExpectedExportedData.RecordedEvents, actualExportedData.RecordedEvents)
-			for _, expectedDevice := range test.ExpectedExportedData.Devices {
-				found := false
-				for _, actualDevice := range actualExportedData.Devices {
-					if actualDevice.Name == expectedDevice.Name {
-						found = true
-					}
-				}
-				assert.True(t, found, fmt.Sprintf("Expected device %s not found in actual devices: %v", expectedDevice.Name, actualExportedData.Devices))
-			}
-			for _, expectedProfile := range test.ExpectedExportedData.Profiles {
-				found := false
-				for _, actualProfile := range actualExportedData.Profiles {
-					if actualProfile.Name == expectedProfile.Name {
-						found = true
-					}
-				}
-				assert.True(t, found, fmt.Sprintf("Expected profile %s not found in actual profiles: %v", expectedProfile.Name, actualExportedData.Profiles))
-			}
-
-		})
-	}
-}
-
-func TestDataManager_ImportRecordedData(t *testing.T) {
-	// TODO: Implement using TDD
+	return testRecordedData, expectedDevices, expectedProfiles
 }
 
 func TestDataManager_CountEvents(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -27,8 +28,9 @@ import (
 	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/transforms"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
+	"github.com/edgexfoundry/app-record-replay/internal/utils"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
-	"github.com/edgexfoundry/go-mod-bootstrap/v3/bootstrap/utils"
+	bootstrapUtils "github.com/edgexfoundry/go-mod-bootstrap/v3/bootstrap/utils"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos/requests"
@@ -44,9 +46,9 @@ const (
 	replayPublishFailed                = "failed to publish replay event: %v"
 	replayDeepCopyFailed               = "deep copy of event to be replayed failed: %v"
 	maxReplayDelayExceeded             = "%s delay exceeds the maximum replay delay of %s. Maximum replay delay is configurable using MaxReplayDelay App Setting"
-	noReplayExists                     = "no replay running or has previously been run"
-	deviceLoadFailed                   = "failed to load device %s for replay/export: %w"
-	profileLoadFailed                  = "failed to load device profile %s for export: %w"
+	noReplayExists                     = "no replay running or previously run"
+	deviceLoadFailed                   = "failed to load device %s for replay/export: %v"
+	profileLoadFailed                  = "failed to load device profile %s for export: %v"
 )
 
 type recordedData struct {
@@ -302,7 +304,7 @@ func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
 			}
 
 			replayEvent := coreDtos.Event{}
-			if err := utils.DeepCopy(event, &replayEvent); err != nil {
+			if err := bootstrapUtils.DeepCopy(event, &replayEvent); err != nil {
 				m.setReplayError(fmt.Errorf(replayDeepCopyFailed, err), true)
 				return
 			}
@@ -422,19 +424,19 @@ func (m *dataManager) ReplayStatus() dtos.ReplayStatus {
 		duration = time.Since(*m.replayStartedAt)
 	}
 
-	errorMessage := ""
+	message := ""
 	if m.replayError != nil {
-		errorMessage = m.replayError.Error()
+		message = m.replayError.Error()
 	} else if m.replayStartedAt == nil && m.replayedDuration == 0 {
-		errorMessage = noReplayExists
+		message = noReplayExists
 	}
 
 	return dtos.ReplayStatus{
-		Running:      m.replayStartedAt != nil,
-		EventCount:   m.replayedEventCount,
-		Duration:     duration,
-		RepeatCount:  m.replayedRepeatCount,
-		ErrorMessage: errorMessage,
+		Running:     m.replayStartedAt != nil,
+		EventCount:  m.replayedEventCount,
+		Duration:    duration,
+		RepeatCount: m.replayedRepeatCount,
+		Message:     message,
 	}
 }
 
@@ -483,21 +485,10 @@ func (m *dataManager) ExportRecordedData() (*dtos.RecordedData, error) {
 	m.appSvc.LoggingClient().Debugf("ARR Export: Exporting %d events, %d devices and %d device profiles",
 		len(m.recordedData.Events), len(m.recordedData.Devices), len(m.recordedData.Profiles))
 
-	var devices []coreDtos.Device
-	var profiles []coreDtos.DeviceProfile
-
-	for _, device := range m.recordedData.Devices {
-		devices = append(devices, *device)
-	}
-
-	for _, profile := range m.recordedData.Profiles {
-		profiles = append(profiles, *profile)
-	}
-
 	return &dtos.RecordedData{
 			RecordedEvents: m.recordedData.Events,
-			Devices:        devices,
-			Profiles:       profiles,
+			Devices:        utils.MapToSlice(m.recordedData.Devices),
+			Profiles:       utils.MapToSlice(m.recordedData.Profiles),
 		},
 		nil
 }
@@ -521,8 +512,119 @@ func (m *dataManager) loadDevices() error {
 // If overwrite parameter is true then Device Profiles and/or Devices will be overwritten.
 // An error is returned if a record or replay session is currently running or the data is incomplete
 func (m *dataManager) ImportRecordedData(data *dtos.RecordedData, overwrite bool) error {
-	//TODO implement me using TDD
-	return errors.New("not implemented")
+	m.recordingMutex.Lock()
+	defer m.recordingMutex.Unlock()
+
+	if m.recordingStartedAt != nil {
+		return recordingInProgressError
+	}
+
+	if m.replayStartedAt != nil {
+		return replayInProgressError
+	}
+
+	// Must handle profiles first, so they exist when a new device is added that references it.
+	err := m.uploadProfiles(data.Profiles, overwrite)
+	if err != nil {
+		return err
+	}
+
+	err = m.uploadDevices(data.Devices, overwrite)
+	if err != nil {
+		return err
+	}
+
+	m.recordedData = &recordedData{
+		Events:   data.RecordedEvents,
+		Devices:  utils.SliceToMap(data.Devices, func(d coreDtos.Device) string { return d.Name }),
+		Profiles: utils.SliceToMap(data.Profiles, func(dp coreDtos.DeviceProfile) string { return dp.Name }),
+	}
+
+	m.appSvc.LoggingClient().Debugf("ARR Import: Imported %d events, %d devices and %d device profiles",
+		len(m.recordedData.Events), len(m.recordedData.Devices), len(m.recordedData.Profiles))
+	return nil
+}
+
+func (m *dataManager) uploadDevices(devices []coreDtos.Device, overwrite bool) error {
+	deviceClient := m.appSvc.DeviceClient()
+	for _, device := range devices {
+		_, err := deviceClient.DeviceNameExists(context.Background(), device.Name)
+		if err != nil && err.Code() != http.StatusNotFound {
+			return fmt.Errorf("failed check if device %s exist in system: %w", device.Name, err)
+		}
+
+		if err != nil && err.Code() == http.StatusNotFound {
+			addRequest := requests.NewAddDeviceRequest(device)
+			_, err := deviceClient.Add(context.Background(), []requests.AddDeviceRequest{addRequest})
+			if err != nil {
+				return fmt.Errorf("failed to add device %s to system: %w", device.Name, err)
+			}
+
+			m.appSvc.LoggingClient().Debugf("ARR Import: Added new device %s", device.Name)
+			continue
+		}
+
+		if !overwrite {
+			continue
+		}
+
+		updateDevice := coreDtos.UpdateDevice{
+			Name:           &device.Name,
+			Description:    &device.Description,
+			AdminState:     &device.AdminState,
+			OperatingState: &device.OperatingState,
+			ServiceName:    &device.ServiceName,
+			ProfileName:    &device.ProfileName,
+			Labels:         device.Labels,
+			Location:       device.Location,
+			AutoEvents:     device.AutoEvents,
+			Protocols:      device.Protocols,
+			Tags:           device.Tags,
+			Properties:     device.Properties,
+		}
+		updateRequest := requests.NewUpdateDeviceRequest(updateDevice)
+		_, err = deviceClient.Update(context.Background(), []requests.UpdateDeviceRequest{updateRequest})
+		if err != nil {
+			return fmt.Errorf("failed to update device %s in system: %w", device.Name, err)
+		}
+
+		m.appSvc.LoggingClient().Debugf("ARR Import: Updated existing device %s", device.Name)
+	}
+
+	return nil
+}
+
+func (m *dataManager) uploadProfiles(profiles []coreDtos.DeviceProfile, overwrite bool) error {
+	profileClient := m.appSvc.DeviceProfileClient()
+	for _, profile := range profiles {
+		_, err := profileClient.DeviceProfileByName(context.Background(), profile.Name)
+		if err != nil && err.Code() != http.StatusNotFound {
+			return fmt.Errorf("failed check if profile %s exists in system: %w", profile.Name, err)
+		}
+
+		addRequest := requests.NewDeviceProfileRequest(profile)
+
+		// If got here with an err then the Device Profile doesn't exist in the system, so must add it.
+		if err != nil {
+			_, err = profileClient.Add(context.Background(), []requests.DeviceProfileRequest{addRequest})
+			if err != nil {
+				return fmt.Errorf("failed to add device profile %s to system: %w", profile.Name, err)
+			}
+
+			m.appSvc.LoggingClient().Debugf("ARR Import: Add new device profile %s", profile.Name)
+			continue
+		}
+
+		if !overwrite {
+			continue
+		}
+
+		// System doesn't allow profiles to be updated as a whole and portions that can be updated,
+		// are just descriptive, so not attempting to do any Device Profile updates.
+		m.appSvc.LoggingClient().Debugf("ARR Import: Existing device profile %s not updated: Can not update existing device profiles", profile.Name)
+	}
+
+	return nil
 }
 
 // Pipeline functions

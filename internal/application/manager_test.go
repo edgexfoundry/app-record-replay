@@ -987,8 +987,6 @@ func TestDataManager_ImportRecordedData_NoDataErrors(t *testing.T) {
 			mockProfileClient.On("DeviceProfileByName", mock.Anything, "P2").
 				Return(responses.DeviceProfileResponse{}, nil)
 			mockProfileClient.On("Add", mock.Anything, mock.Anything).Return(nil, nil)
-			mockProfileClient.On("DeleteByName", mock.Anything, mock.Anything).
-				Return(commonDTO.BaseResponse{}, nil)
 
 			mockLogger := &loggerMocks.LoggingClient{}
 			mockLogger.On("Debugf", mock.Anything, mock.Anything, mock.Anything, mock.Anything)

@@ -602,10 +602,9 @@ func (m *dataManager) uploadProfiles(profiles []coreDtos.DeviceProfile, overwrit
 			return fmt.Errorf("failed check if profile %s exists in system: %w", profile.Name, err)
 		}
 
-		addRequest := requests.NewDeviceProfileRequest(profile)
+		if err != nil && err.Code() == http.StatusNotFound {
+			addRequest := requests.NewDeviceProfileRequest(profile)
 
-		// If got here with an err then the Device Profile doesn't exist in the system, so must add it.
-		if err != nil {
 			_, err = profileClient.Add(context.Background(), []requests.DeviceProfileRequest{addRequest})
 			if err != nil {
 				return fmt.Errorf("failed to add device profile %s to system: %w", profile.Name, err)

@@ -32,7 +32,7 @@
 						"record"
 					]
 				},
-				"description": "Start Recording starts a recording based on parameters in the reequest body"
+				"description": "Start Recording starts a recording based on parameters in the request body"
 			},
 			"response": []
 		},
@@ -165,7 +165,7 @@
 						"data"
 					]
 				},
-				"description": "Export Recording exports the recorded data along with all referenced devices and device profiles. Data can be exported in plain text JSON, GZIP compresed JSON or ZLIB compressed JSON"
+				"description": "Export Recording exports the recorded data along with all referenced devices and device profiles. Data can be exported in plain text JSON, GZIP compressed JSON or ZLIB compressed JSON"
 			},
 			"response": []
 		},

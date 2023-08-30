@@ -1,0 +1,402 @@
+openapi: 3.0.0
+info:
+  title: EdgeX App Record Replay Service
+  description: EdgeX App Record Replay Service REST APIs
+  version: 3.1.0
+servers:
+- url: http://localhost:59712
+  description: Local running instance of EdgeX
+- url: http://127.0.0.1:59712
+  description: Local running instance of EdgeX
+- url: http://0.0.0.0:59712
+  description: Local running instance of EdgeX
+components:
+  schemas:
+    errorMessage:
+      description: String describing the error
+      type: string
+    recordRequest:
+      description: "Contains the parameters for starting a recording"
+      type: object
+      properties:
+        duration:
+          description: "Duration is the amount of time to record. Required if EventLimit is 0"
+          type: number
+        eventLimit:
+          description: "EventLimit is the maximum number of Events to record. Required if Duration is 0"
+          type: number
+        includeDeviceProfiles:
+          description: "IncludeDeviceProfiles is optional list of Device Profile names to Filter For"
+          type: array
+          items:
+            type: string
+        includeDevices:
+          description: "IncludeDevices is optional list of Device names to Filter For"
+          type: array
+          items:
+            type: string
+        includeSources:
+          description: "IncludeSources is optional list of Source names to Filter For"
+          type: array
+          items:
+            type: string
+        excludeDeviceProfiles:
+          description: "ExcludeDeviceProfiles is optional list of Device Profile names to Filter Out"
+          type: array
+          items:
+            type: string
+        excludeDevices:
+          description: "ExcludeDevices is optional list of Device names to Filter Out"
+          type: array
+          items:
+            type: string
+        excludeSources:
+          description: "ExcludeSources is optional list of Source names to Filter Out"
+          type: array
+          items:
+            type: string
+      required:
+        - duration
+        - eventLimit
+    recordStatus:
+      description: "Contains the recording status"
+      type: object
+      properties:
+        inProgress:
+          description: "Indicates if a recording is in-progress or not"
+          type: boolean
+        eventCount:
+          description: "Number of Events that have been recorded"
+          type: number
+        duration:
+          description: "Duration or the recording"
+          type: number
+    recordedData:
+      description: "Contains the recorded data"
+      type: object
+      properties:
+        recordedEvents:
+          description: "List of Event/Reading that were recorded"
+          type: array
+          items:
+            type: object
+        devices:
+          description: "List of unique Devices referenced by the RecordedEvents"
+          type: array
+          items:
+            type: object
+        profiles:
+          description: "List of unique Device Profiles referenced by the RecordedEvents"
+          type: array
+          items:
+            type: object
+      required:
+        - recordedEvents
+        - devices
+        - profiles
+    replayRequest:
+      description: "Contains the parameters for starting a replay session"
+      type: object
+      properties:
+        replayRate:
+          description: "Rate at which the replay the recorded data. Value must be greater than zero. Values less than 1 replay slower and values greater than 1 replay faster than originally recorded"
+          type: number
+        repeatCount:
+          description: "Option number of time to replay the recorded Events"
+          type: number
+      required:
+        - replayRate
+    replayStatus:
+      description: "Contains the status of the replay session"
+      properties:
+        running:
+          description: "Indicates if replay is running or not"
+          type: boolean
+        eventCount:
+          description: "Number of Events replayed"
+          type: number
+        duration:
+          description: "Duration of the replay"
+          type: number
+        repeatCount:
+          description: "Number of repeated replays completed"
+          type: number
+        message:
+          description: "Message providing more information, such as error"
+          type: string
+  examples:
+    recordRequestSimple:
+      value:
+        duration: 60000000000
+        eventLimit: 10
+    recordRequestFilters:
+      value:
+        duration: 60000000000
+        eventLimit: 10
+        includeDeviceProfiles:
+          - "Random-Integer-Device"
+          - "Random-Float-Device"
+          - "Random-UnsignedInteger-Device"
+        includeDevices:
+          - "Random-Float-Device"
+          - "Random-Integer-Device"
+          - "Random-UnsignedInteger-Device"
+        includeSources:
+          - "UInt8"
+          - "Int8"
+          - "Float32"
+        excludeDeviceProfiles:
+          - "Random-Binary-Device"
+          - "Random-Boolean-Device"
+        excludeDevices:
+          - "Random-Binary-Device"
+          - "Random-Boolean-Device"
+        excludeSources:
+          - "UInt16"
+          - "Int16"
+          - "Float64"
+    recordStatus:
+      value:
+        inProgress: true
+        eventCount: 8
+        duration: 10815410829
+    replayRequest:
+      value:
+        replayRate: 1
+        replayCount: 1
+    replayStatus:
+      value:
+        running: true
+        eventCount: 11
+        duration: 13415410829
+        repeatCount: 0
+        message: ""
+paths:
+  /api/v3/record:
+    post:
+      summary: "Starts a new recording"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/recordRequest'
+            examples:
+              RecordRequestSimple:
+                $ref: '#/components/examples/recordRequestSimple'
+              RecordRequestFilters:
+                $ref: '#/components/examples/recordRequestFilters'
+      responses:
+        '202':
+          description: "Indicates request was accepted and recording has started"
+        '400':
+          description: "Indicates request didn't meet requirements"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                400Example:
+                  value: "Record request failed validation: Duration and/or EventLimit must be set"
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "Recording failed: a recording is in progress"
+    get:
+      summary: "Get the status of recording"
+      responses:
+        '200':
+          description: "Indicates the request was processed successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/recordStatus'
+              examples:
+                RecordStatus:
+                  $ref: '#/components/examples/recordStatus'
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "failed to marshal recording status"
+    delete:
+      summary: "Cancels the current recording"
+      responses:
+        '202':
+          description: "Indicates request was accepted and recording has been canceled"
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "failed to cancel recording: no recording currently running"
+  /api/v3/replay:
+    post:
+      summary: "Starts a replay of last recorded or imported data"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/replayRequest'
+            examples:
+              RecordRequest:
+                $ref: '#/components/examples/replayRequest'
+      responses:
+        '202':
+          description: "Indicates request was accepted and replay has started"
+        '400':
+          description: "Indicates request didn't meet requirements"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                400Example:
+                  value: "Replay request failed validation: Replay Rate must be greater than 0"
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "Replay failed: a replay is in progress"
+    get:
+      summary: "Get the status of replay"
+      responses:
+        '200':
+          description: "Indicates the request was processed successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/replayStatus'
+              examples:
+                ReplayStatus:
+                  $ref: '#/components/examples/replayStatus'
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "failed to marshal replay status"
+    delete:
+      summary: "Cancels the current replay session"
+      responses:
+        '202':
+          description: "Indicates request was accepted and replay has been canceled"
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "failed to cancel replay: no replay currently running"
+  /api/v3/data:
+    get:
+      summary: "Download the recorded data (export)"
+      parameters:
+        - in: query
+          name: compression
+          description: "Specifies the type of compression to use. Defaults to none if not set"
+          required: false
+          schema:
+            type: string
+            enum:
+              - gzip
+              - zlib
+            default: none
+          example: gzip
+      responses:
+        '200':
+          description: "Indicates the request was processed successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/recordedData'
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "failed to export recorded data: no recorded data present"
+    post:
+      summary: "Upload saved recorded data (import)"
+      parameters:
+        - in: query
+          name: overwrite
+          description: "Specifies to overwrite existing Devices and Device Profiles. Defaults to true if not set"
+          required: false
+          schema:
+            type: string
+            enum:
+              - true
+              - false
+            default: none
+          example: false
+        - in: header
+          name: Content-Type
+          description: "Describes the content type for that data being uploaded. Only application/json is accepted"
+          required: true
+          schema:
+            type: string
+            example: "application/json"
+        - in: header
+          name: Content-Encoding
+          description: "Describes the content encoding for that data being uploaded. Assumes plain text JSON if omitted"
+          required: false
+          schema:
+            type: string
+            enum:
+              - gzip
+              - deflate
+            default: none
+            example: ""
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/recordedData'
+      responses:
+        '202':
+          description: "Indicates request was accepted and replay has started"
+        '400':
+          description: "Indicates request didn't meet requirements"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                400Example:
+                  value: "Invalid content type ''. Must be application/json"
+        '500':
+          description: "Indicates internal server error"
+          content:
+            application/text:
+              schema:
+                $ref: '#/components/schemas/errorMessage'
+              examples:
+                500Example:
+                  value: "failed to un-compress data: EOF"

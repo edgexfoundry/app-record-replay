@@ -1,31 +1,11 @@
 {
 	"info": {
-		"_postman_id": "4ec49d64-e989-48fd-b63b-aa214ec482e7",
+		"_postman_id": "8c1630be-4563-40db-87a0-06b45c63e9fa",
 		"name": "Record and Reply",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "6062813"
 	},
 	"item": [
-		{
-			"name": "Ping",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "localhost:59712/api/v3/ping",
-					"host": [
-						"localhost"
-					],
-					"port": "59712",
-					"path": [
-						"api",
-						"v3",
-						"ping"
-					]
-				}
-			},
-			"response": []
-		},
 		{
 			"name": "Start Recording",
 			"request": {
@@ -33,7 +13,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"duration\" : 600000,\r\n    \"eventLimit\" : 100\r\n}",
+					"raw": "{\r\n    \"duration\" : 60000000000,\r\n    \"eventLimit\" : 10,\r\n    \"IncludeDeviceProfiles\" : [\"Random-Integer-Device\", \"Random-Float-Device\", \"Random-UnsignedInteger-Device\"],\r\n    \"IncludeDevices\" : [\"Random-Float-Device\", \"Random-Integer-Device\", \"Random-UnsignedInteger-Device\"],\r\n    \"IncludeSources\": [\"UInt8\", \"Int8\", \"Float32\"],\r\n    \"ExcludeDeviceProfiles\": [\"Random-Binary-Device\", \"Random-Boolean-Device\"],\r\n    \"ExcludeDevices\" : [\"Random-Binary-Device\", \"Random-Boolean-Device\"],\r\n    \"ExcludeSources\" :[\"UInt16\", \"Int16\", \"Float64\"]\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -51,42 +31,10 @@
 						"v3",
 						"record"
 					]
-				}
+				},
+				"description": "Start Recording starts a recording based on parameters in the reequest body"
 			},
-			"response": [
-				{
-					"name": "Start Recording - empty request",
-					"originalRequest": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n    \"duration\" : 600000,\r\n    \"eventLimit\" : 100\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "localhost:59712/api/v3/record",
-							"host": [
-								"localhost"
-							],
-							"port": "59712",
-							"path": [
-								"api",
-								"v3",
-								"record"
-							]
-						}
-					},
-					"_postman_previewlanguage": null,
-					"header": null,
-					"cookie": [],
-					"body": null
-				}
-			]
+			"response": []
 		},
 		{
 			"name": "Recording Status",
@@ -104,7 +52,8 @@
 						"v3",
 						"record"
 					]
-				}
+				},
+				"description": "Recording Status gets that status of the current running or latest run recording"
 			},
 			"response": []
 		},
@@ -124,7 +73,8 @@
 						"v3",
 						"record"
 					]
-				}
+				},
+				"description": "Cancel Recording cancels the current running recording."
 			},
 			"response": []
 		},
@@ -144,33 +94,10 @@
 						"v3",
 						"replay"
 					]
-				}
+				},
+				"description": "Start Replay starts a replay session using the parameters in the request body"
 			},
-			"response": [
-				{
-					"name": "Start Replay - empty request",
-					"originalRequest": {
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "localhost:59712/api/v3/replay",
-							"host": [
-								"localhost"
-							],
-							"port": "59712",
-							"path": [
-								"api",
-								"v3",
-								"replay"
-							]
-						}
-					},
-					"_postman_previewlanguage": null,
-					"header": null,
-					"cookie": [],
-					"body": null
-				}
-			]
+			"response": []
 		},
 		{
 			"name": "Replay Status",
@@ -188,7 +115,8 @@
 						"v3",
 						"replay"
 					]
-				}
+				},
+				"description": "Replay Status gets that status of the current running or latest run replay"
 			},
 			"response": []
 		},
@@ -208,17 +136,46 @@
 						"v3",
 						"replay"
 					]
-				}
+				},
+				"description": "Cancel Replay cancels the current running replay session."
 			},
 			"response": []
 		},
 		{
-			"name": "Export Recording",
+			"name": "Export Recording - JSON",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "file",
+					"file": {}
+				},
+				"url": {
+					"raw": "localhost:59712/api/v3/data",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"data"
+					]
+				},
+				"description": "Export Recording exports the recorded data along with all referenced devices and device profiles. Data can be exported in plain text JSON, GZIP compresed JSON or ZLIB compressed JSON"
+			},
+			"response": []
+		},
+		{
+			"name": "Export Recording - GZIP",
 			"request": {
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "localhost:59712/api/v3/data",
+					"raw": "localhost:59712/api/v3/data?compression=gzip",
 					"host": [
 						"localhost"
 					],
@@ -227,16 +184,56 @@
 						"api",
 						"v3",
 						"data"
+					],
+					"query": [
+						{
+							"key": "compression",
+							"value": "gzip"
+						}
 					]
-				}
+				},
+				"description": "Export Recording exports the recorded data along with all referenced devices and device profiles. Data can be exported in plain text JSON, GZIP compressed JSON or ZLIB compressed JSON"
 			},
 			"response": []
 		},
 		{
-			"name": "Import Recording",
+			"name": "Export Recording - ZLIB",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:59712/api/v3/data?compression=zlib",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"data"
+					],
+					"query": [
+						{
+							"key": "compression",
+							"value": "zlib"
+						}
+					]
+				},
+				"description": "Export Recording exports the recorded data along with all referenced devices and device profiles. Data can be exported in plain text JSON, GZIP compressed JSON or ZLIB compressed JSON"
+			},
+			"response": []
+		},
+		{
+			"name": "Import Recording - JSON",
 			"request": {
 				"method": "POST",
 				"header": [],
+				"body": {
+					"mode": "file",
+					"file": {
+						"src": "///wsl$/Ubuntu-18.04/home/lenny/edgex/test.json"
+					}
+				},
 				"url": {
 					"raw": "localhost:59712/api/v3/data",
 					"host": [
@@ -248,7 +245,84 @@
 						"v3",
 						"data"
 					]
-				}
+				},
+				"description": "Import Recording imports the recorded data along with all referenced devices and device profiles. Data can be imported in plain text JSON, GZIP compressed JSON or ZLIB compressed JSON"
+			},
+			"response": []
+		},
+		{
+			"name": "Import Recording - GZIP",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "Content-Encoding",
+						"value": "gzip",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "file",
+					"file": {
+						"src": "///wsl$/Ubuntu-18.04/home/lenny/edgex/test.gz"
+					}
+				},
+				"url": {
+					"raw": "localhost:59712/api/v3/data",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"data"
+					]
+				},
+				"description": "Import Recording imports the recorded data along with all referenced devices and device profiles. Data can be imported in plain text JSON, GZIP compressed JSON or ZLIB compressed JSON"
+			},
+			"response": []
+		},
+		{
+			"name": "Import Recording - ZLIB",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "Content-Encoding",
+						"value": "deflate",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "file",
+					"file": {
+						"src": "///wsl$/Ubuntu-18.04/home/lenny/edgex/test.zlib"
+					}
+				},
+				"url": {
+					"raw": "localhost:59712/api/v3/data",
+					"host": [
+						"localhost"
+					],
+					"port": "59712",
+					"path": [
+						"api",
+						"v3",
+						"data"
+					]
+				},
+				"description": "Import Recording imports the recorded data along with all referenced devices and device profiles. Data can be imported in plain text JSON, GZIP compressed JSON or ZLIB compressed JSON"
 			},
 			"response": []
 		}

@@ -547,7 +547,8 @@ func (m *dataManager) ImportRecordedData(data *dtos.RecordedData, overwrite bool
 
 func (m *dataManager) uploadDevices(devices []coreDtos.Device, overwrite bool) error {
 	deviceClient := m.appSvc.DeviceClient()
-	for _, device := range devices {
+	for index := range devices {
+		device := devices[index]
 		_, err := deviceClient.DeviceNameExists(context.Background(), device.Name)
 		if err != nil && err.Code() != http.StatusNotFound {
 			return fmt.Errorf("failed check if device %s exist in system: %w", device.Name, err)

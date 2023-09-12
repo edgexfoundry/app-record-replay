@@ -1,6 +1,6 @@
 module github.com/edgexfoundry/app-record-replay
 
-go 1.20
+go 1.21
 
 require (
 	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.26

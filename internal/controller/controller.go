@@ -133,8 +133,7 @@ func (c *httpController) startRecording(ctx echo.Context) error {
 		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s: %v", failedRecording, err))
 	}
 
-	ctx.Response().WriteHeader(http.StatusAccepted)
-	return nil
+	return ctx.NoContent(http.StatusAccepted)
 }
 
 // CancelRecording cancels the current recording session
@@ -180,8 +179,7 @@ func (c *httpController) startReplay(ctx echo.Context) error {
 		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s: %v", failedReplay, err))
 	}
 
-	ctx.Response().WriteHeader(http.StatusAccepted)
-	return nil
+	return ctx.NoContent(http.StatusAccepted)
 }
 
 // cancelReplay cancels the current replay session as the HTTP response.
@@ -190,8 +188,7 @@ func (c *httpController) cancelReplay(ctx echo.Context) error {
 		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to cancel replay: %v", err))
 	}
 
-	ctx.Response().WriteHeader(http.StatusAccepted)
-	return nil
+	return ctx.NoContent(http.StatusAccepted)
 }
 
 // replayStatus returns the status of the current replay session as the HTTP response.
@@ -323,6 +320,5 @@ func (c *httpController) importRecordedData(ctx echo.Context) error {
 		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s: %v", failedImportingData, err))
 	}
 
-	ctx.Response().WriteHeader(http.StatusAccepted)
-	return nil
+	return ctx.NoContent(http.StatusAccepted)
 }

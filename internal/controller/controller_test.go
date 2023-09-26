@@ -99,7 +99,7 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 func TestHttpController_StartRecording(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(WrapEchoHandler(target.startRecording))
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.startRecording))
 
 	emptyRequestDTO := dtos.RecordRequest{}
 
@@ -169,7 +169,7 @@ func TestHttpController_StartRecording(t *testing.T) {
 func TestHttpController_RecordingStatus(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(WrapEchoHandler(target.recordingStatus))
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.recordingStatus))
 
 	inProgressRecordStatus := dtos.RecordStatus{
 		InProgress: true,
@@ -217,7 +217,7 @@ func TestHttpController_RecordingStatus(t *testing.T) {
 func TestHttpController_CancelRecording(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(WrapEchoHandler(target.cancelRecording))
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.cancelRecording))
 
 	tests := []struct {
 		Name           string
@@ -246,7 +246,7 @@ func TestHttpController_CancelRecording(t *testing.T) {
 func TestHttpController_StartReplay(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(WrapEchoHandler(target.startReplay))
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.startReplay))
 
 	validRequestDTO := dtos.ReplayRequest{
 		ReplayRate: 1,
@@ -298,7 +298,7 @@ func TestHttpController_StartReplay(t *testing.T) {
 func TestHttpController_ReplayStatus(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(WrapEchoHandler(target.replayStatus))
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.replayStatus))
 
 	notRunningReplayStatus := dtos.ReplayStatus{
 		Running:     false,
@@ -359,7 +359,7 @@ func TestHttpController_ReplayStatus(t *testing.T) {
 func TestHttpController_CancelReplay(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(WrapEchoHandler(target.cancelReplay))
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.cancelReplay))
 
 	tests := []struct {
 		Name           string
@@ -473,7 +473,7 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 			target, mockDataManager, _ := createTargetAndMocks()
 			mockDataManager.On("ExportRecordedData").Return(test.ExpectedResponse, test.ExpectedError)
 
-			handler := http.HandlerFunc(WrapEchoHandler(target.exportRecordedData))
+			handler := http.HandlerFunc(WrapEchoHandler(t, target.exportRecordedData))
 
 			req, err := http.NewRequest(http.MethodGet, dataRoute, nil)
 			require.NoError(t, err)
@@ -640,7 +640,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			target, mockDataManager, _ := createTargetAndMocks()
-			handler := http.HandlerFunc(WrapEchoHandler(target.importRecordedData))
+			handler := http.HandlerFunc(WrapEchoHandler(t, target.importRecordedData))
 			mockDataManager.On("ImportRecordedData", mock.Anything, mock.Anything).Return(test.ExpectedError)
 
 			req, err := http.NewRequest(http.MethodPost, dataRoute, bytes.NewReader(test.ExpectedResponse))
@@ -732,9 +732,11 @@ func compressData(t *testing.T, compressionType string, data dtos.RecordedData) 
 }
 
 // WrapHandler wraps `handler func(http.ResponseWriter, *http.Request)` into `echo.HandlerFunc`
-func WrapEchoHandler(handler echo.HandlerFunc) func(http.ResponseWriter, *http.Request) {
+func WrapEchoHandler(t *testing.T, handler echo.HandlerFunc) func(http.ResponseWriter, *http.Request) {
+	t.Helper()
 	return func(writer http.ResponseWriter, req *http.Request) {
 		ctx := echo.New().NewContext(req, writer)
-		handler(ctx)
+		err := handler(ctx)
+		require.NoError(t, err)
 	}
 }

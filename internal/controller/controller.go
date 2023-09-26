@@ -223,8 +223,7 @@ func (c *httpController) exportRecordedData(ctx echo.Context) error {
 			return ctx.String(http.StatusInternalServerError, "failed to marshal recorded data")
 		}
 		ctx.Response().Header().Set("Content-Type", "application/json")
-		ctx.Response().WriteHeader(http.StatusOK)
-		_, _ = ctx.Response().Write(jsonResponse)
+		return ctx.String(http.StatusOK, string(jsonResponse))
 
 	case zlibCompression:
 		c.appSdk.LoggingClient().Debug("ARR Export - Exporting as JSON using ZLIB compression")

@@ -147,7 +147,7 @@ func (c *httpController) cancelRecording(ctx echo.Context) error {
 	return nil
 }
 
-// recordingStatus return nils the status of the current recording session
+// recordingStatus returns the status of the current recording session as the HTTP response.
 func (c *httpController) recordingStatus(ctx echo.Context) error {
 	recordingStatus := c.dataManager.RecordingStatus()
 
@@ -156,13 +156,11 @@ func (c *httpController) recordingStatus(ctx echo.Context) error {
 		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to marshal recording status: %s", err))
 	}
 
-	ctx.Response().WriteHeader(http.StatusOK)
-	_, _ = ctx.Response().Write(jsonResponse)
-	return nil
+	return ctx.String(http.StatusOK, string(jsonResponse))
 }
 
 // startReplay starts a replay session based on the values in the request
-// An error is return niled if the request data is incomplete or a record or replay session is currently running.
+// An error is returned if the request data is incomplete or a record or replay session is currently running.
 func (c *httpController) startReplay(ctx echo.Context) error {
 	startRequest := &dtos.ReplayRequest{}
 
@@ -186,7 +184,7 @@ func (c *httpController) startReplay(ctx echo.Context) error {
 	return nil
 }
 
-// cancelReplay cancels the current replay session
+// cancelReplay cancels the current replay session as the HTTP response.
 func (c *httpController) cancelReplay(ctx echo.Context) error {
 	if err := c.dataManager.CancelReplay(); err != nil {
 		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to cancel replay: %v", err))
@@ -196,7 +194,7 @@ func (c *httpController) cancelReplay(ctx echo.Context) error {
 	return nil
 }
 
-// replayStatus return nils the status of the current replay session
+// replayStatus returns the status of the current replay session as the HTTP response.
 func (c *httpController) replayStatus(ctx echo.Context) error {
 	replayStatus := c.dataManager.ReplayStatus()
 
@@ -205,13 +203,11 @@ func (c *httpController) replayStatus(ctx echo.Context) error {
 		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to marshal replay status: %s", err))
 	}
 
-	ctx.Response().WriteHeader(http.StatusOK)
-	_, _ = ctx.Response().Write(jsonResponse)
-	return nil
+	return ctx.String(http.StatusOK, string(jsonResponse))
 }
 
-// exportRecordedData return nils the data for the last record session
-// An error is return niled if the no record session was run or a record session is currently running
+// exportRecordedData returns the data for the last record session as the HTTP response.
+// An error is returned if the no record session was run or a record session is currently running
 func (c *httpController) exportRecordedData(ctx echo.Context) error {
 	recordedData, err := c.dataManager.ExportRecordedData()
 	if err != nil {
@@ -260,7 +256,7 @@ func (c *httpController) exportRecordedData(ctx echo.Context) error {
 }
 
 // importRecordedData imports data from a previously exported record session.
-// An error is return niled if a record or replay session is currently running or the data is incomplete
+// An error is returned if a record or replay session is currently running or the data is incomplete
 func (c *httpController) importRecordedData(ctx echo.Context) error {
 	importedRecordedData := &dtos.RecordedData{}
 	var reader io.ReadCloser

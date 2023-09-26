@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,9 +51,9 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, target.dataManager)
 }
 
-func TestHttpController_AddRoutes_Success(t *testing.T) {
+func TestHttpController_AddCustomRoutes_Success(t *testing.T) {
 	target, _, mockSdk := createTargetAndMocks()
-	mockSdk.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockSdk.On("AddCustomRoute", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	err := target.AddRoutes()
 	require.NoError(t, err)
@@ -76,12 +77,12 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 		{"Import", dataRoute, http.MethodPost},
 	}
 
-	expectedError := errors.New("AddRoute error")
+	expectedError := errors.New("AddRoutes error")
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			mockSdk := &appMocks.ApplicationService{}
-			mockSdk.On("AddRoute", test.Route, mock.Anything, test.Method).Return(expectedError)
-			mockSdk.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			mockSdk.On("AddCustomRoute", test.Route, mock.Anything, mock.Anything, test.Method).Return(expectedError)
+			mockSdk.On("AddCustomRoute", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockSdk.On("LoggingClient").Return(logger.NewMockClient())
 
 			target := New(nil, mockSdk)
@@ -98,7 +99,7 @@ func TestHttpController_AddRoutes_Error(t *testing.T) {
 func TestHttpController_StartRecording(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(target.startRecording)
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.startRecording))
 
 	emptyRequestDTO := dtos.RecordRequest{}
 
@@ -168,7 +169,7 @@ func TestHttpController_StartRecording(t *testing.T) {
 func TestHttpController_RecordingStatus(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(target.recordingStatus)
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.recordingStatus))
 
 	inProgressRecordStatus := dtos.RecordStatus{
 		InProgress: true,
@@ -216,7 +217,7 @@ func TestHttpController_RecordingStatus(t *testing.T) {
 func TestHttpController_CancelRecording(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(target.cancelRecording)
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.cancelRecording))
 
 	tests := []struct {
 		Name           string
@@ -245,7 +246,7 @@ func TestHttpController_CancelRecording(t *testing.T) {
 func TestHttpController_StartReplay(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(target.startReplay)
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.startReplay))
 
 	validRequestDTO := dtos.ReplayRequest{
 		ReplayRate: 1,
@@ -297,7 +298,7 @@ func TestHttpController_StartReplay(t *testing.T) {
 func TestHttpController_ReplayStatus(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(target.replayStatus)
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.replayStatus))
 
 	notRunningReplayStatus := dtos.ReplayStatus{
 		Running:     false,
@@ -358,7 +359,7 @@ func TestHttpController_ReplayStatus(t *testing.T) {
 func TestHttpController_CancelReplay(t *testing.T) {
 	target, mockDataManager, _ := createTargetAndMocks()
 
-	handler := http.HandlerFunc(target.cancelReplay)
+	handler := http.HandlerFunc(WrapEchoHandler(t, target.cancelReplay))
 
 	tests := []struct {
 		Name           string
@@ -386,7 +387,6 @@ func TestHttpController_CancelReplay(t *testing.T) {
 func TestHttpController_ExportRecordedData(t *testing.T) {
 
 	noRecordedData := dtos.RecordedData{}
-
 	recordedData := dtos.RecordedData{
 		RecordedEvents: []coreDtos.Event{
 			coreDtos.Event{
@@ -473,7 +473,7 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 			target, mockDataManager, _ := createTargetAndMocks()
 			mockDataManager.On("ExportRecordedData").Return(test.ExpectedResponse, test.ExpectedError)
 
-			handler := http.HandlerFunc(target.exportRecordedData)
+			handler := http.HandlerFunc(WrapEchoHandler(t, target.exportRecordedData))
 
 			req, err := http.NewRequest(http.MethodGet, dataRoute, nil)
 			require.NoError(t, err)
@@ -640,7 +640,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			target, mockDataManager, _ := createTargetAndMocks()
-			handler := http.HandlerFunc(target.importRecordedData)
+			handler := http.HandlerFunc(WrapEchoHandler(t, target.importRecordedData))
 			mockDataManager.On("ImportRecordedData", mock.Anything, mock.Anything).Return(test.ExpectedError)
 
 			req, err := http.NewRequest(http.MethodPost, dataRoute, bytes.NewReader(test.ExpectedResponse))
@@ -729,4 +729,14 @@ func compressData(t *testing.T, compressionType string, data dtos.RecordedData) 
 	}
 
 	return buf.Bytes()
+}
+
+// WrapHandler wraps `handler func(http.ResponseWriter, *http.Request)` into `echo.HandlerFunc`
+func WrapEchoHandler(t *testing.T, handler echo.HandlerFunc) func(http.ResponseWriter, *http.Request) {
+	t.Helper()
+	return func(writer http.ResponseWriter, req *http.Request) {
+		ctx := echo.New().NewContext(req, writer)
+		err := handler(ctx)
+		require.NoError(t, err)
+	}
 }

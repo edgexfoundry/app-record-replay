@@ -42,7 +42,7 @@ func TestCreateAndRunService_Success(t *testing.T) {
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
 		mockAppService.Mock.On("ApplicationSettings").Return(map[string]string{MaxReplayDelayAppSetting: "1s"})
 		mockAppService.On("DeviceClient").Return(&clientMocks.DeviceClient{})
-		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		mockAppService.On("AddCustomRoute", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		mockAppService.On("Run").Return(nil)
 		return mockAppService, true
 	}
@@ -116,7 +116,7 @@ func TestCreateAndRunService_Run_Failed(t *testing.T) {
 		mockAppService.On("LoggingClient").Return(logger.NewMockClient())
 		mockAppService.Mock.On("ApplicationSettings").Return(map[string]string{MaxReplayDelayAppSetting: "1s"})
 		mockAppService.On("DeviceClient").Return(&clientMocks.DeviceClient{})
-		mockAppService.On("AddRoute", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		mockAppService.On("AddCustomRoute", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		mockAppService.On("Run").Return(fmt.Errorf("failed")).Run(func(args mock.Arguments) {
 			RunCalled = true
 		})

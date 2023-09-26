@@ -20,6 +20,7 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"fmt"
+	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
 	"strconv"
@@ -74,30 +75,31 @@ func New(dataManager interfaces.DataManager, appSdk appInterfaces.ApplicationSer
 }
 
 func (c *httpController) AddRoutes() error {
-	if err := c.appSdk.AddRoute(recordRoute, c.startRecording, http.MethodPost); err != nil {
+
+	if err := c.appSdk.AddCustomRoute(recordRoute, false, c.startRecording, http.MethodPost); err != nil {
 		return fmt.Errorf(failedRouteMessage, recordRoute, http.MethodPost, err)
 	}
-	if err := c.appSdk.AddRoute(recordRoute, c.recordingStatus, http.MethodGet); err != nil {
+	if err := c.appSdk.AddCustomRoute(recordRoute, false, c.recordingStatus, http.MethodGet); err != nil {
 		return fmt.Errorf(failedRouteMessage, recordRoute, http.MethodGet, err)
 	}
-	if err := c.appSdk.AddRoute(recordRoute, c.cancelRecording, http.MethodDelete); err != nil {
+	if err := c.appSdk.AddCustomRoute(recordRoute, false, c.cancelRecording, http.MethodDelete); err != nil {
 		return fmt.Errorf(failedRouteMessage, recordRoute, http.MethodDelete, err)
 	}
 
-	if err := c.appSdk.AddRoute(replayRoute, c.startReplay, http.MethodPost); err != nil {
+	if err := c.appSdk.AddCustomRoute(replayRoute, false, c.startReplay, http.MethodPost); err != nil {
 		return fmt.Errorf(failedRouteMessage, replayRoute, http.MethodPost, err)
 	}
-	if err := c.appSdk.AddRoute(replayRoute, c.replayStatus, http.MethodGet); err != nil {
+	if err := c.appSdk.AddCustomRoute(replayRoute, false, c.replayStatus, http.MethodGet); err != nil {
 		return fmt.Errorf(failedRouteMessage, replayRoute, http.MethodGet, err)
 	}
-	if err := c.appSdk.AddRoute(replayRoute, c.cancelReplay, http.MethodDelete); err != nil {
+	if err := c.appSdk.AddCustomRoute(replayRoute, false, c.cancelReplay, http.MethodDelete); err != nil {
 		return fmt.Errorf(failedRouteMessage, replayRoute, http.MethodDelete, err)
 	}
 
-	if err := c.appSdk.AddRoute(dataRoute, c.exportRecordedData, http.MethodGet); err != nil {
+	if err := c.appSdk.AddCustomRoute(dataRoute, false, c.exportRecordedData, http.MethodGet); err != nil {
 		return fmt.Errorf(failedRouteMessage, dataRoute, http.MethodGet, err)
 	}
-	if err := c.appSdk.AddRoute(dataRoute, c.importRecordedData, http.MethodPost); err != nil {
+	if err := c.appSdk.AddCustomRoute(dataRoute, false, c.importRecordedData, http.MethodPost); err != nil {
 		return fmt.Errorf(failedRouteMessage, dataRoute, http.MethodPost, err)
 	}
 
@@ -106,274 +108,221 @@ func (c *httpController) AddRoutes() error {
 	return nil
 }
 
-// StartRecording starts a recording session based on the values in the request.
+// StartRecording starts a recording session based on the values in the ctx.Request().
 // An error is returned if the request data is incomplete.
-func (c *httpController) startRecording(writer http.ResponseWriter, request *http.Request) {
+func (c *httpController) startRecording(ctx echo.Context) error {
 	startRequest := &dtos.RecordRequest{}
 
-	if err := json.NewDecoder(request.Body).Decode(startRequest); err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
-		return
+	if err := json.NewDecoder(ctx.Request().Body).Decode(startRequest); err != nil {
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: %v", failedRequestJSON, err))
 	}
 
 	if startRequest.Duration == 0 && startRequest.EventLimit == 0 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(failedRecordRequestValidate))
-		return
+		return ctx.String(http.StatusBadRequest, failedRecordRequestValidate)
 	}
 
 	if startRequest.Duration < 0 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(failedRecordDurationValidate))
-		return
+		return ctx.String(http.StatusBadRequest, failedRecordDurationValidate)
 	}
 
 	if startRequest.EventLimit < 0 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(failedRecordEventLimitValidate))
-		return
+		return ctx.String(http.StatusBadRequest, failedRecordEventLimitValidate)
 	}
 
 	if err := c.dataManager.StartRecording(*startRequest); err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRecording, err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s: %v", failedRecording, err))
 	}
 
-	writer.WriteHeader(http.StatusAccepted)
+	ctx.Response().WriteHeader(http.StatusAccepted)
+	return nil
 }
 
 // CancelRecording cancels the current recording session
-func (c *httpController) cancelRecording(writer http.ResponseWriter, request *http.Request) {
+func (c *httpController) cancelRecording(ctx echo.Context) error {
 	if err := c.dataManager.CancelRecording(); err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("failed to cancel recording: %v", err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to cancel recording: %v", err))
 	}
 
-	writer.WriteHeader(http.StatusAccepted)
+	ctx.Response().WriteHeader(http.StatusAccepted)
+	return nil
 }
 
-// recordingStatus returns the status of the current recording session
-func (c *httpController) recordingStatus(writer http.ResponseWriter, request *http.Request) {
+// recordingStatus returns the status of the current recording session as the HTTP response.
+func (c *httpController) recordingStatus(ctx echo.Context) error {
 	recordingStatus := c.dataManager.RecordingStatus()
 
 	jsonResponse, err := json.Marshal(recordingStatus)
 	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("failed to marshal recording status: %s", err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to marshal recording status: %s", err))
 	}
 
-	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(jsonResponse)
+	return ctx.String(http.StatusOK, string(jsonResponse))
 }
 
 // startReplay starts a replay session based on the values in the request
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
-func (c *httpController) startReplay(writer http.ResponseWriter, request *http.Request) {
+func (c *httpController) startReplay(ctx echo.Context) error {
 	startRequest := &dtos.ReplayRequest{}
 
-	if err := json.NewDecoder(request.Body).Decode(startRequest); err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
-		return
+	if err := json.NewDecoder(ctx.Request().Body).Decode(startRequest); err != nil {
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: %v", failedRequestJSON, err))
 	}
 
 	if startRequest.ReplayRate <= 0 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(failedReplayRateValidate))
-		return
+		return ctx.String(http.StatusBadRequest, failedReplayRateValidate)
 	}
 
 	if startRequest.RepeatCount < 0 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(failedRepeatCountValidate))
-		return
+		return ctx.String(http.StatusBadRequest, failedRepeatCountValidate)
 	}
 
 	if err := c.dataManager.StartReplay(*startRequest); err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedReplay, err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s: %v", failedReplay, err))
 	}
 
-	writer.WriteHeader(http.StatusAccepted)
+	ctx.Response().WriteHeader(http.StatusAccepted)
+	return nil
 }
 
-// cancelReplay cancels the current replay session
-func (c *httpController) cancelReplay(writer http.ResponseWriter, request *http.Request) {
+// cancelReplay cancels the current replay session as the HTTP response.
+func (c *httpController) cancelReplay(ctx echo.Context) error {
 	if err := c.dataManager.CancelReplay(); err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("failed to cancel replay: %v", err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to cancel replay: %v", err))
 	}
 
-	writer.WriteHeader(http.StatusAccepted)
+	ctx.Response().WriteHeader(http.StatusAccepted)
+	return nil
 }
 
-// replayStatus returns the status of the current replay session
-func (c *httpController) replayStatus(writer http.ResponseWriter, request *http.Request) {
+// replayStatus returns the status of the current replay session as the HTTP response.
+func (c *httpController) replayStatus(ctx echo.Context) error {
 	replayStatus := c.dataManager.ReplayStatus()
 
 	jsonResponse, err := json.Marshal(replayStatus)
 	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("failed to marshal replay status: %s", err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to marshal replay status: %s", err))
 	}
 
-	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(jsonResponse)
+	return ctx.String(http.StatusOK, string(jsonResponse))
 }
 
-// exportRecordedData returns the data for the last record session
+// exportRecordedData returns the data for the last record session as the HTTP response.
 // An error is returned if the no record session was run or a record session is currently running
-func (c *httpController) exportRecordedData(writer http.ResponseWriter, request *http.Request) {
+func (c *httpController) exportRecordedData(ctx echo.Context) error {
 	recordedData, err := c.dataManager.ExportRecordedData()
 	if err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("failed to export recorded data: %v", err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("failed to export recorded data: %v", err))
 	}
 
-	compression := request.URL.Query().Get("compression")
+	compression := ctx.Request().URL.Query().Get("compression")
 	switch compression {
 	case noCompression:
 		c.appSdk.LoggingClient().Debug("ARR Export - Exporting as JSON w/o compression")
 		jsonResponse, err := json.Marshal(recordedData)
 		if err != nil {
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte("failed to marshal recorded data"))
-			return
+			return ctx.String(http.StatusInternalServerError, "failed to marshal recorded data")
 		}
-		writer.Header().Set("Content-Type", "application/json")
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(jsonResponse)
+		ctx.Response().Header().Set("Content-Type", "application/json")
+		return ctx.String(http.StatusOK, string(jsonResponse))
 
 	case zlibCompression:
 		c.appSdk.LoggingClient().Debug("ARR Export - Exporting as JSON using ZLIB compression")
-		writer.Header().Set("Content-Encoding", contentEncodingZlib)
-		writer.Header().Set("Content-Type", "application/json")
-		zlibWriter := zlib.NewWriter(writer)
+		ctx.Response().Header().Set("Content-Encoding", contentEncodingZlib)
+		ctx.Response().Header().Set("Content-Type", "application/json")
+		zlibWriter := zlib.NewWriter(ctx.Response().Writer)
 		defer zlibWriter.Close()
 		err = json.NewEncoder(zlibWriter).Encode(&recordedData)
 		if err != nil {
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(fmt.Sprintf("%s %s: %s", failedDataCompression, zlibCompression, err)))
-			return
+			return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s %s: %s", failedDataCompression, zlibCompression, err))
 		}
 
 	case gzipCompression:
 		c.appSdk.LoggingClient().Debug("ARR Export - Exporting as JSON using GZIP compression")
-		writer.Header().Set("Content-Encoding", contentEncodingGzip)
-		writer.Header().Set("Content-Type", "application/json")
-		gZipWriter := gzip.NewWriter(writer)
+		ctx.Response().Header().Set("Content-Encoding", contentEncodingGzip)
+		ctx.Response().Header().Set("Content-Type", "application/json")
+		gZipWriter := gzip.NewWriter(ctx.Response().Writer)
 		defer gZipWriter.Close()
 		err = json.NewEncoder(gZipWriter).Encode(&recordedData)
 		if err != nil {
-			writer.WriteHeader(http.StatusInternalServerError)
-			_, _ = writer.Write([]byte(fmt.Sprintf("%s %s: %s", failedDataCompression, gzipCompression, err)))
-			return
+			return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s %s: %s", failedDataCompression, gzipCompression, err))
 		}
 
 	default:
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("compression format not available: %s", compression)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("compression format not available: %s", compression))
 	}
 
+	return nil
 }
 
 // importRecordedData imports data from a previously exported record session.
 // An error is returned if a record or replay session is currently running or the data is incomplete
-func (c *httpController) importRecordedData(writer http.ResponseWriter, request *http.Request) {
+func (c *httpController) importRecordedData(ctx echo.Context) error {
 	importedRecordedData := &dtos.RecordedData{}
 	var reader io.ReadCloser
 	var err error
 	var overWriteProfilesDevices bool
 
-	contentType := request.Header.Get(common.ContentType)
+	contentType := ctx.Request().Header.Get(common.ContentType)
 	if contentType != common.ContentTypeJSON {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("Invalid content type '%s'. Must be application/json", contentType)))
-		return
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("Invalid content type '%s'. Must be application/json", contentType))
 	}
 
-	queryParam := request.URL.Query().Get("overwrite")
+	queryParam := ctx.Request().URL.Query().Get("overwrite")
 	if len(queryParam) == 0 {
 		overWriteProfilesDevices = true
 	} else {
 		overWriteProfilesDevices, err = strconv.ParseBool(queryParam)
 		if err != nil {
-			writer.WriteHeader(http.StatusBadRequest)
-			_, _ = writer.Write([]byte(fmt.Sprintf("failed to parse overwrite parameter: %v", err)))
-			return
+			return ctx.String(http.StatusBadRequest, fmt.Sprintf("failed to parse overwrite parameter: %v", err))
 		}
 	}
 
-	compression := request.Header.Get("Content-Encoding")
+	compression := ctx.Request().Header.Get("Content-Encoding")
 	switch compression {
 
 	case noCompression:
 		c.appSdk.LoggingClient().Debug("ARR Import - Importing as JSON w/o compression")
-		reader = request.Body
+		reader = ctx.Request().Body
 
 	case contentEncodingGzip:
 		c.appSdk.LoggingClient().Debug("ARR Import - Importing as JSON using GZIP compression")
-		reader, err = gzip.NewReader(request.Body)
+		reader, err = gzip.NewReader(ctx.Request().Body)
 		if err != nil {
-			writer.WriteHeader(http.StatusBadRequest)
-			_, _ = writer.Write([]byte(fmt.Sprintf("%s: %s", failedToUncompressData, err)))
-			return
+			return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: %s", failedToUncompressData, err))
 		}
 
 	case contentEncodingZlib:
 		c.appSdk.LoggingClient().Debug("ARR Import - Importing as JSON using ZLIB compression")
-		reader, err = zlib.NewReader(request.Body)
+		reader, err = zlib.NewReader(ctx.Request().Body)
 		if err != nil {
-			writer.WriteHeader(http.StatusBadRequest)
-			_, _ = writer.Write([]byte(fmt.Sprintf("%s: %s", failedToUncompressData, err)))
-			return
+			return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: %s", failedToUncompressData, err))
 		}
 	default:
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("compression format %s not supported", compression)))
-		return
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("compression format %s not supported", compression))
 
 	}
 	defer reader.Close()
 	err = json.NewDecoder(reader).Decode(&importedRecordedData)
 	if err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedRequestJSON, err)))
-		return
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: %v", failedRequestJSON, err))
 	}
 
 	if len(importedRecordedData.RecordedEvents) < 1 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: no recorded events", noDataFound)))
-		return
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: no recorded events", noDataFound))
 	}
 
 	if len(importedRecordedData.Devices) < 1 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: no devices", noDataFound)))
-		return
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: no devices", noDataFound))
 	}
 
 	if len(importedRecordedData.Profiles) < 1 {
-		writer.WriteHeader(http.StatusBadRequest)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: no profiles", noDataFound)))
-		return
+		return ctx.String(http.StatusBadRequest, fmt.Sprintf("%s: no profiles", noDataFound))
 	}
 
 	if err := c.dataManager.ImportRecordedData(importedRecordedData, overWriteProfilesDevices); err != nil {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(fmt.Sprintf("%s: %v", failedImportingData, err)))
-		return
+		return ctx.String(http.StatusInternalServerError, fmt.Sprintf("%s: %v", failedImportingData, err))
 	}
 
-	writer.WriteHeader(http.StatusAccepted)
+	ctx.Response().WriteHeader(http.StatusAccepted)
+	return nil
 }

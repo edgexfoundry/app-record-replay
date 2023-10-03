@@ -163,7 +163,7 @@ components:
     replayRequest:
       value:
         replayRate: 1
-        replayCount: 1
+        repeatCount: 1
     replayStatus:
       value:
         running: true

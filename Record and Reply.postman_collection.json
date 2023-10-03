@@ -1,6 +1,6 @@
 {
 	"info": {
-		"_postman_id": "8c1630be-4563-40db-87a0-06b45c63e9fa",
+		"_postman_id": "9dc9535e-1c3f-4b8d-b1d8-3c15d9a23c32",
 		"name": "Record and Reply",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "6062813"
@@ -83,6 +83,15 @@
 			"request": {
 				"method": "POST",
 				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"replayRate\": 1,\r\n  \"repeatCount\": 1\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
 				"url": {
 					"raw": "localhost:59712/api/v3/replay",
 					"host": [
@@ -231,7 +240,7 @@
 				"body": {
 					"mode": "file",
 					"file": {
-						"src": "///wsl$/Ubuntu-18.04/home/lenny/edgex/test.json"
+						"src": "///wsl$/Ubuntu-18.04/home/lenny/edgex/recording.json"
 					}
 				},
 				"url": {
@@ -269,7 +278,7 @@
 				"body": {
 					"mode": "file",
 					"file": {
-						"src": "///wsl$/Ubuntu-18.04/home/lenny/edgex/test.gz"
+						"src": "///wsl$/Ubuntu-18.04/home/lenny/edgex/recording.gz"
 					}
 				},
 				"url": {

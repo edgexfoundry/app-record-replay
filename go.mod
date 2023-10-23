@@ -3,7 +3,7 @@ module github.com/edgexfoundry/app-record-replay
 go 1.21
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.44
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.45
 	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.1.0-dev.50
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.1.0-dev.17
 	github.com/google/uuid v1.3.1
@@ -16,7 +16,7 @@ require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/diegoholiveira/jsonlogic/v3 v3.3.1 // indirect
+	github.com/diegoholiveira/jsonlogic/v3 v3.3.2 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.4.3 // indirect
 	github.com/edgexfoundry/go-mod-configuration/v3 v3.1.0-dev.7 // indirect
 	github.com/edgexfoundry/go-mod-messaging/v3 v3.1.0-dev.30 // indirect

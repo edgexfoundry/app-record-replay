@@ -8,4 +8,32 @@
 > **The source for the latest release can be found at [Releases](https://github.com/edgexfoundry/app-record-replay/releases).**
 
 
-Content TBD
+For latest documentation please visit https://docs.edgexfoundry.org/latest/microservices/application/services/AppRecordReplay/Purpose/
+
+## Build Prerequisites
+
+Please see the [edgex-go README](https://github.com/edgexfoundry/edgex-go/blob/main/README.md#prerequisites).
+
+## Build with NATS Messaging
+Currently, the NATS Messaging capability (NATS MessageBus) is opt-in at build time.
+This means that the published Docker image does not include the NATS messaging capability.
+```makefile
+make build-nats - Builds local binary with NATS MessageBus support
+make docker-nats - Builds local docker image with NATS MessageBus support
+```
+The locally built Docker image can then be used in place of the published Docker image in your compose file.
+See [Compose Builder](https://github.com/edgexfoundry/edgex-compose/tree/main/compose-builder#gen) `nat-bus` option to generate compose file for NATS and local dev images.
+
+## Packaging
+
+This component is packaged as docker image.
+
+For docker, please refer to the [Dockerfile](Dockerfile) and [Docker Compose Builder](https://github.com/edgexfoundry/edgex-compose/tree/main/compose-builder) scripts.
+
+## Versioning
+
+Please refer to the EdgeX Foundry [versioning policy](https://wiki.edgexfoundry.org/pages/viewpage.action?pageId=21823969) for information on how EdgeX services are released and how EdgeX services are compatible with one another.  Specifically, device services (and the associated SDK), application services (and the associated app functions SDK), and client tools (like the EdgeX CLI and UI) can have independent minor releases, but these services must be compatible with the latest major release of EdgeX.
+
+## Long Term Support
+
+This service is a developer tool and will not be covered under LTS 

@@ -8,7 +8,6 @@ coverage.out
 logs/
 .idea
 VERSION
-vendor/
 
 # snap files
 *.snap

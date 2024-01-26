@@ -3,10 +3,10 @@ module github.com/edgexfoundry/app-record-replay
 go 1.21
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.2.0-dev.14
-	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.2.0-dev.13
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.2.0-dev.16
+	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.2.0-dev.14
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.2.0-dev.4
-	github.com/google/uuid v1.5.0
+	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/stretchr/testify v1.8.4
 )

@@ -1135,6 +1135,7 @@ func TestDataManager_ImportRecordedData_DataErrors(t *testing.T) {
 }
 
 func createTestRecordedData() (dtos.RecordedData, map[string]*coreDtos.Device, map[string]*coreDtos.DeviceProfile) {
+	val := "hello"
 	expectedEvents := []coreDtos.Event{
 		{
 			Versionable: commonDTO.Versionable{},
@@ -1147,7 +1148,7 @@ func createTestRecordedData() (dtos.RecordedData, map[string]*coreDtos.Device, m
 					ResourceName:  "R1",
 					ProfileName:   "P1",
 					ValueType:     "Int32",
-					SimpleReading: coreDtos.SimpleReading{Value: "23"},
+					SimpleReading: coreDtos.SimpleReading{Value: &val},
 				},
 			},
 		},
@@ -1162,7 +1163,7 @@ func createTestRecordedData() (dtos.RecordedData, map[string]*coreDtos.Device, m
 					ResourceName:  "R2",
 					ProfileName:   "P1",
 					ValueType:     "Int64",
-					SimpleReading: coreDtos.SimpleReading{Value: "456"},
+					SimpleReading: coreDtos.SimpleReading{Value: &val},
 				},
 			},
 		},
@@ -1177,7 +1178,7 @@ func createTestRecordedData() (dtos.RecordedData, map[string]*coreDtos.Device, m
 					ResourceName:  "R1",
 					ProfileName:   "P1",
 					ValueType:     "Int31",
-					SimpleReading: coreDtos.SimpleReading{Value: "55"},
+					SimpleReading: coreDtos.SimpleReading{Value: &val},
 				},
 			},
 		},
@@ -1192,7 +1193,7 @@ func createTestRecordedData() (dtos.RecordedData, map[string]*coreDtos.Device, m
 					ResourceName:  "R2",
 					ProfileName:   "P2",
 					ValueType:     "String",
-					SimpleReading: coreDtos.SimpleReading{Value: "Hello"},
+					SimpleReading: coreDtos.SimpleReading{Value: &val},
 				},
 			},
 		},

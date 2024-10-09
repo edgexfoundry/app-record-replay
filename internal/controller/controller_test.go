@@ -385,8 +385,8 @@ func TestHttpController_CancelReplay(t *testing.T) {
 }
 
 func TestHttpController_ExportRecordedData(t *testing.T) {
-
 	noRecordedData := dtos.RecordedData{}
+	val := "1456.0"
 	recordedData := dtos.RecordedData{
 		RecordedEvents: []coreDtos.Event{
 			coreDtos.Event{
@@ -395,7 +395,7 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 				Readings: []coreDtos.BaseReading{
 					coreDtos.BaseReading{
 						SimpleReading: coreDtos.SimpleReading{
-							Value: "1456.0",
+							Value: &val,
 						},
 					},
 				},
@@ -406,7 +406,7 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 				Readings: []coreDtos.BaseReading{
 					coreDtos.BaseReading{
 						SimpleReading: coreDtos.SimpleReading{
-							Value: "1457.0",
+							Value: &val,
 						},
 					},
 				},
@@ -507,7 +507,7 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 
 func TestHttpController_ImportRecordedData(t *testing.T) {
 	emptyDataRequest := dtos.RecordedData{}
-
+	val := "1456.0"
 	recordedEventRequest := dtos.RecordedData{
 		RecordedEvents: []coreDtos.Event{
 			coreDtos.Event{
@@ -516,7 +516,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 				Readings: []coreDtos.BaseReading{
 					coreDtos.BaseReading{
 						SimpleReading: coreDtos.SimpleReading{
-							Value: "1456.0",
+							Value: &val,
 						},
 					},
 				},
@@ -527,7 +527,7 @@ func TestHttpController_ImportRecordedData(t *testing.T) {
 				Readings: []coreDtos.BaseReading{
 					coreDtos.BaseReading{
 						SimpleReading: coreDtos.SimpleReading{
-							Value: "1457.0",
+							Value: &val,
 						},
 					},
 				},

@@ -452,3 +452,21 @@ https://github.com/go-jose/go-jose/blob/v2.6.3/LICENSE
 
 spf13/cast (MIT) - https://github.com/spf13/cast
 https://github.com/spf13/cast/blob/master/LICENSE
+
+github.com/barkimedes/go-deepcopy (MIT) https://github.com/barkimedes/go-deepcopy
+https://github.com/barkimedes/go-deepcopy/blob/master/LICENSE
+
+github.com/jackc/pgerrcode (MIT) https://github.com/jackc/pgerrcode
+https://github.com/jackc/pgerrcode/blob/master/LICENSE
+
+github.com/jackc/pgpassfile (MIT) https://github.com/jackc/pgpassfile
+https://github.com/jackc/pgpassfile/blob/master/LICENSE
+
+github.com/jackc/pgservicefile (MIT) https://github.com/jackc/pgservicefile
+https://github.com/jackc/pgservicefile/blob/master/LICENSE
+
+github.com/jackc/pgx/v5 (MIT) https://github.com/jackc/pgx
+https://github.com/jackc/pgx/blob/master/LICENSE
+
+github.com/jackc/puddle/v2 (MIT) https://github.com/jackc/puddle
+https://github.com/jackc/puddle/blob/master/LICENSE

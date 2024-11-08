@@ -17,9 +17,9 @@
 .PHONY: build tidy docker test clean vendor
 
 # change the following boolean flag to enable or disable the Full RELRO (RELocation Read Only) for linux ELF (Executable and Linkable Format) binaries
-ENABLE_FULL_RELRO:="true"
+ENABLE_FULL_RELRO=true
 # change the following boolean flag to enable or disable PIE for linux binaries which is needed for ASLR (Address Space Layout Randomization) on Linux, the ASLR support on Windows is enabled by default
-ENABLE_PIE:="true"
+ENABLE_PIE=true
 
 # VERSION file is not needed for local development, In the CI/CD pipeline, a temporary VERSION file is written
 # if you need a specific version, just override below
@@ -29,9 +29,14 @@ APPVERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
 # it must first remove the word 'required' so the offset of $2 is the same if there are multiple required modules
 SDKVERSION=$(shell cat ./go.mod | grep 'github.com/edgexfoundry/app-functions-sdk-go/v3 v' | sed 's/require//g' | awk '{print $$2}')
 
+ifeq ($(ENABLE_FULL_RELRO), true)
+	ENABLE_FULL_RELRO_GOFLAGS = -bindnow
+endif
+
 MICROSERVICE=app-record-replay
 GOFLAGS=-ldflags "-s -w -X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.SDKVersion=$(SDKVERSION) \
-                   -X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.ApplicationVersion=$(APPVERSION)" \
+                   -X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.ApplicationVersion=$(APPVERSION) \
+                   $(ENABLE_FULL_RELRO_GOFLAGS)" \
                    -trimpath -mod=readonly
 GOTESTFLAGS?=-race
 
@@ -39,11 +44,7 @@ GIT_SHA=$(shell git rev-parse HEAD)
 
 ARCH=$(shell uname -m)
 
-ifeq ($(ENABLE_FULL_RELRO), "true")
-	GOFLAGS += -ldflags "-bindnow"
-endif
-
-ifeq ($(ENABLE_PIE), "true")
+ifeq ($(ENABLE_PIE), true)
 	GOFLAGS += -buildmode=pie
 endif
 

@@ -19,7 +19,7 @@ package utils
 import (
 	"testing"
 
-	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
+	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v4/dtos"
 	"github.com/stretchr/testify/assert"
 )
 

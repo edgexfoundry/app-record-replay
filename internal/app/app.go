@@ -19,10 +19,10 @@ package app
 import (
 	"time"
 
-	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
+	"github.com/edgexfoundry/app-functions-sdk-go/v4/pkg/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/application"
 	"github.com/edgexfoundry/app-record-replay/internal/controller"
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/clients/logger"
 )
 
 const (

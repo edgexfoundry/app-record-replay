@@ -19,7 +19,7 @@ package dtos
 import (
 	"time"
 
-	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
+	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v4/dtos"
 )
 
 // RecordRequest DTO specifies the record parameters to start a recording session

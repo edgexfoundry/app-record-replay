@@ -52,4 +52,4 @@ COPY --from=builder /app/app-record-replay /app-record-replay
 EXPOSE 59712
 
 ENTRYPOINT ["/app-record-replay"]
-CMD ["-cp=consul.http://edgex-core-consul:8500", "--registry"]
+CMD ["-cp=keeper.http://edgex-core-keeper:59890", "--registry"]

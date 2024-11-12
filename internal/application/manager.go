@@ -25,15 +25,15 @@ import (
 	"sync"
 	"time"
 
-	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
-	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/transforms"
+	appInterfaces "github.com/edgexfoundry/app-functions-sdk-go/v4/pkg/interfaces"
+	"github.com/edgexfoundry/app-functions-sdk-go/v4/pkg/transforms"
 	"github.com/edgexfoundry/app-record-replay/internal/interfaces"
 	"github.com/edgexfoundry/app-record-replay/internal/utils"
 	"github.com/edgexfoundry/app-record-replay/pkg/dtos"
-	bootstrapUtils "github.com/edgexfoundry/go-mod-bootstrap/v3/bootstrap/utils"
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
-	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos/requests"
+	bootstrapUtils "github.com/edgexfoundry/go-mod-bootstrap/v4/bootstrap/utils"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/common"
+	coreDtos "github.com/edgexfoundry/go-mod-core-contracts/v4/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/dtos/requests"
 	"github.com/google/uuid"
 )
 

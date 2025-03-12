@@ -1,19 +1,11 @@
 test.txt
 go.mod.bk
-debug
+/debug/
 *.exe
 app-record-replay
 .vscode
 coverage.out
-logs/
+/logs/
 .idea
 VERSION
-vendor/
-
-# snap files
-*.snap
-*.assert
-prime/
-stage/
-parts/
-squashfs-root/
+/vendor/

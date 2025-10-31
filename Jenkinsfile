@@ -16,5 +16,6 @@
 
 edgeXBuildGoApp (
     project: 'app-record-replay',
-    buildSnap: false
+    buildSnap: false,
+    goVersion: '1.23'
 )

@@ -85,9 +85,9 @@ func NewManager(service appInterfaces.ApplicationService, maxReplayDelay time.Du
 	}
 }
 
-var recordingInProgressError = errors.New("a recording is in progress")
-var batchParametersNotSetError = errors.New("duration and/or count not set")
-var noRecordingRunningToCancelError = errors.New("no recording currently running")
+var errRecordingInProgress = errors.New("a recording is in progress")
+var errBatchParametersNotSet = errors.New("duration and/or count not set")
+var errNoRecordingRunningToCancel = errors.New("no recording currently running")
 
 // StartRecording starts a recording session based on the values in the request.
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
@@ -98,11 +98,11 @@ func (m *dataManager) StartRecording(request dtos.RecordRequest) error {
 	defer m.recordingMutex.Unlock()
 
 	if m.recordingStartedAt != nil {
-		return recordingInProgressError
+		return errRecordingInProgress
 	}
 
 	if m.replayStartedAt != nil {
-		return replayInProgressError
+		return errReplayInProgress
 	}
 
 	m.recordedData = nil
@@ -156,7 +156,7 @@ func (m *dataManager) StartRecording(request dtos.RecordRequest) error {
 	} else if request.Duration > 0 {
 		batch, err = transforms.NewBatchByTime(request.Duration.String())
 	} else {
-		err = batchParametersNotSetError
+		err = errBatchParametersNotSet
 	}
 
 	if err != nil {
@@ -189,7 +189,7 @@ func (m *dataManager) CancelRecording() error {
 	defer m.recordingMutex.Unlock()
 
 	if m.recordingStartedAt == nil {
-		return noRecordingRunningToCancelError
+		return errNoRecordingRunningToCancel
 	}
 
 	// This stops recording of Events
@@ -220,10 +220,10 @@ func (m *dataManager) RecordingStatus() dtos.RecordStatus {
 	return status
 }
 
-var replayInProgressError = errors.New("a replay is in progress")
-var noRecordedData = errors.New("no recorded data present")
-var invalidReplayRate = errors.New("invalid ReplayRate, value must be greater than 0")
-var invalidReplayCount = errors.New("invalid ReplayCount, value must be greater than or equal 0. Zero defaults to 1")
+var errReplayInProgress = errors.New("a replay is in progress")
+var errNoRecordedData = errors.New("no recorded data present")
+var errInvalidReplayRate = errors.New("invalid ReplayRate, value must be greater than 0")
+var errInvalidReplayCount = errors.New("invalid ReplayCount, value must be greater than or equal 0. Zero defaults to 1")
 
 // StartReplay starts a replay session based on the values in the request
 // An error is returned if the request data is incomplete or a record or replay session is currently running.
@@ -232,23 +232,23 @@ func (m *dataManager) StartReplay(request dtos.ReplayRequest) error {
 	defer m.recordingMutex.Unlock()
 
 	if m.recordingStartedAt != nil {
-		return recordingInProgressError
+		return errRecordingInProgress
 	}
 
 	if m.replayStartedAt != nil {
-		return replayInProgressError
+		return errReplayInProgress
 	}
 
 	if m.recordedData == nil {
-		return noRecordedData
+		return errNoRecordedData
 	}
 
 	if request.ReplayRate <= 0 {
-		return invalidReplayRate
+		return errInvalidReplayRate
 	}
 
 	if request.RepeatCount < 0 {
-		return invalidReplayCount
+		return errInvalidReplayCount
 	}
 
 	now := time.Now()
@@ -299,7 +299,7 @@ func (m *dataManager) replayRecordedEvents(request dtos.ReplayRequest) {
 
 			// Check if replay cancel func has been called to cancel the replay
 			if m.replayContext.Err() != nil {
-				m.setReplayError(replayCanceled, false)
+				m.setReplayError(errReplayCanceled, false)
 				return
 			}
 
@@ -389,8 +389,8 @@ func (m *dataManager) incrementReplayRepeatCount() {
 	m.replayedRepeatCount++
 }
 
-var noReplayRunningToCancelError = errors.New("no replay currently running")
-var replayCanceled = errors.New("replay canceled")
+var errNoReplayRunningToCancel = errors.New("no replay currently running")
+var errReplayCanceled = errors.New("replay canceled")
 
 // CancelReplay cancels the current replay session
 func (m *dataManager) CancelReplay() error {
@@ -398,13 +398,13 @@ func (m *dataManager) CancelReplay() error {
 	defer m.recordingMutex.Unlock()
 
 	if m.replayStartedAt == nil {
-		return noReplayRunningToCancelError
+		return errNoReplayRunningToCancel
 	}
 
 	if m.replayCancelFunc != nil {
 		m.replayCancelFunc()
 		m.replayStartedAt = nil
-		m.replayError = replayCanceled
+		m.replayError = errReplayCanceled
 	}
 
 	m.appSvc.LoggingClient().Debug("ARR Cancel Replay: Replay of Events has been canceled")
@@ -440,7 +440,7 @@ func (m *dataManager) ReplayStatus() dtos.ReplayStatus {
 	}
 }
 
-var noEventsRecorded = errors.New("no events recorded")
+var errNoEventsRecorded = errors.New("no events recorded")
 
 // ExportRecordedData returns the data for the last record session
 // An error is returned if the no record session was run or a record session is currently running
@@ -449,11 +449,11 @@ func (m *dataManager) ExportRecordedData() (*dtos.RecordedData, error) {
 	defer m.recordingMutex.Unlock()
 
 	if m.recordedData == nil {
-		return nil, noRecordedData
+		return nil, errNoRecordedData
 	}
 
 	if len(m.recordedData.Events) == 0 {
-		return nil, noEventsRecorded
+		return nil, errNoEventsRecorded
 	}
 
 	if len(m.recordedData.Devices) == 0 {
@@ -516,11 +516,11 @@ func (m *dataManager) ImportRecordedData(data *dtos.RecordedData, overwrite bool
 	defer m.recordingMutex.Unlock()
 
 	if m.recordingStartedAt != nil {
-		return recordingInProgressError
+		return errRecordingInProgress
 	}
 
 	if m.replayStartedAt != nil {
-		return replayInProgressError
+		return errReplayInProgress
 	}
 
 	// Must handle profiles first, so they exist when a new device is added that references it.
@@ -629,18 +629,18 @@ func (m *dataManager) uploadProfiles(profiles []coreDtos.DeviceProfile, overwrit
 
 // Pipeline functions
 
-var countsNoDataError = errors.New("CountEvents function received nil data")
-var countsDataNotEventError = errors.New("CountEvents function received data that is not an Event")
+var errCountsNoData = errors.New("CountEvents function received nil data")
+var errCountsDataNotEvent = errors.New("CountEvents function received data that is not an Event")
 
 // countEvents counts the number of Events recorded so far. Must be called after any filters and before the Batch function.
 // This count is used when reporting Recording Status
 func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
 	if data == nil {
-		return false, countsNoDataError
+		return false, errCountsNoData
 	}
 
 	if _, ok := data.(coreDtos.Event); !ok {
-		return false, countsDataNotEventError
+		return false, errCountsDataNotEvent
 	}
 
 	m.recordingMutex.Lock()
@@ -653,8 +653,8 @@ func (m *dataManager) countEvents(_ appInterfaces.AppFunctionContext, data any) 
 	return true, data
 }
 
-var batchNoDataError = errors.New("ProcessBatchedData function received nil data")
-var batchDataNotEventCollectionError = errors.New("ProcessBatchedData function received data that is not collection of Event")
+var errBatchNoData = errors.New("ProcessBatchedData function received nil data")
+var errBatchDataNotEventCollection = errors.New("ProcessBatchedData function received data that is not collection of Event")
 
 // processBatchedData processes the batched data for the current recording session
 func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, data any) (bool, interface{}) {
@@ -673,12 +673,12 @@ func (m *dataManager) processBatchedData(_ appInterfaces.AppFunctionContext, dat
 	lc.Debug("ARR Process Recorded Data: Recording of Events has ended and functions pipeline has been removed")
 
 	if data == nil {
-		return false, batchNoDataError
+		return false, errBatchNoData
 	}
 
 	events, ok := data.([]coreDtos.Event)
 	if !ok {
-		return false, batchDataNotEventCollectionError
+		return false, errBatchDataNotEventCollection
 	}
 
 	duration := 0 * time.Second

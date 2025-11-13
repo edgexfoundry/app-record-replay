@@ -110,13 +110,13 @@ func TestDataManager_StartRecording(t *testing.T) {
 			Name:                    "Fail Path - recording already running",
 			StartRequest:            countAndTimeNoFiltersRequest,
 			RecordingAlreadyRunning: true,
-			ExpectedStartError:      recordingInProgressError,
+			ExpectedStartError:      errRecordingInProgress,
 		},
 		{
 			Name:               "Fail Path - replay is running",
 			StartRequest:       countAndTimeNoFiltersRequest,
 			ReplayRunning:      true,
-			ExpectedStartError: replayInProgressError,
+			ExpectedStartError: errReplayInProgress,
 		},
 		{
 			Name:             "Fail Path - pipeline set error",
@@ -126,7 +126,7 @@ func TestDataManager_StartRecording(t *testing.T) {
 		{
 			Name:               "Fail Path - No count or duration set",
 			StartRequest:       dtos.RecordRequest{},
-			ExpectedStartError: batchParametersNotSetError,
+			ExpectedStartError: errBatchParametersNotSet,
 		},
 	}
 
@@ -321,7 +321,7 @@ func TestDataManager_CancelRecording(t *testing.T) {
 		{
 			Name:             "Error Path - No recording running to be canceled",
 			RecordingRunning: false,
-			ExpectedError:    noRecordingRunningToCancelError,
+			ExpectedError:    errNoRecordingRunningToCancel,
 		},
 	}
 
@@ -407,7 +407,7 @@ func TestDataManager_StartReplay(t *testing.T) {
 				RepeatCount: 0,
 			},
 			RecordedData:       &recordedData{},
-			ExpectedStartError: invalidReplayRate,
+			ExpectedStartError: errInvalidReplayRate,
 		},
 		{
 			Name: "Error Path - Bad ReplayRate 0",
@@ -416,7 +416,7 @@ func TestDataManager_StartReplay(t *testing.T) {
 				RepeatCount: 0,
 			},
 			RecordedData:       &recordedData{},
-			ExpectedStartError: invalidReplayRate,
+			ExpectedStartError: errInvalidReplayRate,
 		},
 		{
 			Name: "Error Path - Bad RepeatCount -1",
@@ -425,21 +425,21 @@ func TestDataManager_StartReplay(t *testing.T) {
 				RepeatCount: -1,
 			},
 			RecordedData:       &recordedData{},
-			ExpectedStartError: invalidReplayCount,
+			ExpectedStartError: errInvalidReplayCount,
 		},
 		{
 			Name:               "Error Path - Recording in progress",
 			RecordingRunning:   true,
-			ExpectedStartError: recordingInProgressError,
+			ExpectedStartError: errRecordingInProgress,
 		},
 		{
 			Name:                 "Error Path - Replay in progress",
 			ReplayAlreadyRunning: true,
-			ExpectedStartError:   replayInProgressError,
+			ExpectedStartError:   errReplayInProgress,
 		},
 		{
 			Name:               "Error Path - No recorded data",
-			ExpectedStartError: noRecordedData,
+			ExpectedStartError: errNoRecordedData,
 		},
 	}
 
@@ -786,7 +786,7 @@ func TestDataManager_CancelReplay(t *testing.T) {
 		{
 			Name:                "Replay not running",
 			ReplayRunning:       false,
-			ExpectedCancelError: noReplayRunningToCancelError,
+			ExpectedCancelError: errNoReplayRunningToCancel,
 		},
 	}
 
@@ -878,8 +878,8 @@ func TestDataManager_ExportRecordedData(t *testing.T) {
 		ExpectedError        error
 	}{
 		{"Valid", &recordedData{Events: expectedExportedData.RecordedEvents}, &expectedExportedData, nil, nil, nil},
-		{"No data", nil, nil, nil, nil, noRecordedData},
-		{"No Events", &recordedData{}, nil, nil, nil, noEventsRecorded},
+		{"No data", nil, nil, nil, nil, errNoRecordedData},
+		{"No Events", &recordedData{}, nil, nil, nil, errNoEventsRecorded},
 		{"Device load err", &recordedData{Events: expectedExportedData.RecordedEvents}, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device")), nil, errors.New("failed to load device")},
 		{"Profile load err", &recordedData{Events: expectedExportedData.RecordedEvents}, nil, nil, edgexErr.NewCommonEdgeXWrapper(errors.New("failed to load device profile")), errors.New("failed to load device profile")},
 	}
@@ -961,8 +961,8 @@ func TestDataManager_ImportRecordedData_NoDataErrors(t *testing.T) {
 	}{
 		{"Valid", &expectedImportData, true, false, false, nil},
 		{"Valid - no overwrite", &expectedImportData, false, false, false, nil},
-		{"Recording In Progress error", nil, true, true, false, recordingInProgressError},
-		{"Replay In Progress error", nil, true, false, true, replayInProgressError},
+		{"Recording In Progress error", nil, true, true, false, errRecordingInProgress},
+		{"Replay In Progress error", nil, true, false, true, errReplayInProgress},
 	}
 
 	for _, test := range tests {
@@ -1253,8 +1253,8 @@ func TestDataManager_CountEvents(t *testing.T) {
 		ExpectedError error
 	}{
 		{"Valid", coreDtos.Event{}, 5, nil},
-		{"Nil data", nil, 1, countsNoDataError},
-		{"Not Event", coreDtos.Metric{}, 1, countsDataNotEventError},
+		{"Nil data", nil, 1, errCountsNoData},
+		{"Not Event", coreDtos.Metric{}, 1, errCountsDataNotEvent},
 	}
 
 	for _, test := range tests {
@@ -1297,8 +1297,8 @@ func TestDataManager_ProcessBatchedData(t *testing.T) {
 	}{
 		{"Valid", expectedBatchedEvents, false, nil},
 		{"Valid - Recording previously canceled", nil, true, nil},
-		{"Nil data", nil, false, batchNoDataError},
-		{"Not Collection of Events", coreDtos.Event{}, false, batchDataNotEventCollectionError},
+		{"Nil data", nil, false, errBatchNoData},
+		{"Not Collection of Events", coreDtos.Event{}, false, errBatchDataNotEventCollection},
 	}
 
 	for _, test := range tests {

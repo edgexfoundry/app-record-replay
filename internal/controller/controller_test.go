@@ -391,8 +391,12 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 			coreDtos.Event{
 				DeviceName:  "test",
 				ProfileName: "test",
+				Tags:        coreDtos.Tags{},
+				Extensions:  map[string]any{},
 				Readings: []coreDtos.BaseReading{
 					coreDtos.BaseReading{
+						Tags:       coreDtos.Tags{},
+						Extensions: map[string]any{},
 						SimpleReading: coreDtos.SimpleReading{
 							Value: "1456.0",
 						},
@@ -402,8 +406,12 @@ func TestHttpController_ExportRecordedData(t *testing.T) {
 			coreDtos.Event{
 				DeviceName:  "test",
 				ProfileName: "test",
+				Tags:        coreDtos.Tags{},
+				Extensions:  map[string]any{},
 				Readings: []coreDtos.BaseReading{
 					coreDtos.BaseReading{
+						Tags:       coreDtos.Tags{},
+						Extensions: map[string]any{},
 						SimpleReading: coreDtos.SimpleReading{
 							Value: "1456.0",
 						},
